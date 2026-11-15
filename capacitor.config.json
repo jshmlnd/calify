@@ -1,0 +1,9 @@
+{
+  "appId": "com.calify.app",
+  "appName": "Calify",
+  "webDir": "dist",
+  "android": { "backgroundColor": "#000000" },
+  "plugins": {
+    "SystemBars": { "style": "DARK", "initialViewportFitValueHint": "cover" }
+  }
+}

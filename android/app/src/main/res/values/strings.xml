@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Calify</string>
+    <string name="title_activity_main">Calify</string>
+    <string name="package_name">com.calify.app</string>
+    <string name="custom_url_scheme">com.calify.app</string>
+</resources>

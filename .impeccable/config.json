@@ -1,0 +1,62 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/styles.css"
+        ],
+        "createdAt": "2026-11-15T08:36:21.517Z",
+        "reason": "Claude: .mix-label stripe reproduces the colored stripe on Spotify's mix cards in the user's reference screenshot (Deftones Mix / Pierce The Veil Mix)"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "android/app/src/main/assets/public/assets/index-CarQPKoE.css"
+        ],
+        "createdAt": "2026-11-15T08:52:43.794Z",
+        "reason": "Claude: generated build copy of src/styles.css; the .mix-label stripe reproduces Spotify's mix-card stripe from the user's reference screenshot"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "android/app/src/main/assets/public/assets/index-Bj7fqVG6.css"
+        ],
+        "createdAt": "2026-11-15T10:04:24.220Z",
+        "reason": "Claude: generated build copy of src/styles.css; .mix-label stripe intentionally reproduces Spotify's mix-card stripe from the user's reference screenshot"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "android/app/src/main/assets/public/assets/index-YSCje9UB.css"
+        ],
+        "createdAt": "2026-11-15T10:24:35.752Z",
+        "reason": "Claude: generated build copy of src/styles.css; .mix-label stripe intentionally reproduces Spotify's mix-card stripe from the user's reference screenshot"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "android/app/src/main/assets/public/assets/index-3rrprdj5.css"
+        ],
+        "createdAt": "2026-11-15T10:44:28.378Z",
+        "reason": "Claude: generated build copy of src/styles.css; .mix-label stripe intentionally reproduces Spotify's mix-card stripe from the user's reference screenshot"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "android/app/src/main/assets/public/assets/index-DnzlqtOq.css"
+        ],
+        "createdAt": "2026-11-15T10:57:48.093Z",
+        "reason": "Claude: generated build copy of src/styles.css; .mix-label stripe intentionally reproduces Spotify's mix-card stripe from the user's reference screenshot"
+      }
+    ]
+  }
+}
