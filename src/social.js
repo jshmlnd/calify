@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 import { useStore } from './store'
 import { resizeImage } from './image'
-import { cleanPatch, publicTracks, lastPlayedOf, lastPlayedPlan, likeOf, fresh, splitPath, SIGN_SECONDS } from './profiledata.js'
+import { cleanPatch, publicTracks, canPublish, lastPlayedOf, lastPlayedPlan, likeOf, fresh, splitPath, SIGN_SECONDS } from './profiledata.js'
 
 const me = () => useStore.getState().user?.id
 const must = ({ data, error }) => { if (error) throw error; return data }
@@ -101,9 +101,19 @@ async function saveLastPlayed(track, uid) {
 }
 
 // ---------- Public playlists (metadata only). Published rows are keyed (owner, local_id).
+// A playlist's `public` flag holds the uid that published it, so another account on this device never republishes it.
 const covers = new Map() // local_id -> id of the track whose art is the uploaded cover
-export async function publishPlaylist(p) {
-  const uid = me(), s = useStore.getState()
+const chain = new Map() // local_id -> tail of that playlist's publish/unpublish queue (they must not overlap)
+const serial = (id, fn) => {
+  const run = (chain.get(id) || Promise.resolve()).catch(() => {}).then(fn)
+  chain.set(id, run)
+  return run
+}
+const mine = (id, uid) => canPublish({ uid: me(), flag: useStore.getState().playlists.find(x => x.id === id)?.public }) && me() === uid
+export const publishPlaylist = p => { const uid = me(); return serial(p.id, () => publish(p, uid)) }
+async function publish(p, uid) {
+  if (!mine(p.id, uid)) return
+  const s = useStore.getState()
   const old = must(await supabase.from('public_playlists').select('cover_path').eq('owner', uid).eq('local_id', p.id).maybeSingle())?.cover_path || null
   const first = p.tracks[0], src = first && (s.localArt[first.id] || first.art)
   let cover = old
@@ -112,35 +122,59 @@ export async function publishPlaylist(p) {
     if (src) cover = await fetch(src).then(r => r.blob()).then(b => resizeImage(b, 300)).then(b => uploadImage('cover', b)).catch(() => null)
     covers.set(p.id, first?.id)
   }
+  // The awaits above can outlast a "Make private", delete or sign-out: don't resurrect the row.
+  if (!mine(p.id, uid)) return cover !== old && removeImage(cover)
   try {
     must(await supabase.from('public_playlists').upsert({ owner: uid, local_id: p.id, name: p.name, cover_path: cover, tracks: publicTracks(p.tracks), updated_at: new Date().toISOString() }, { onConflict: 'owner,local_id' }))
   } catch (e) { if (cover !== old) removeImage(cover); throw e }
   if (old && old !== cover) removeImage(old)
 }
-export async function unpublishPlaylist(localId) {
-  const rows = must(await supabase.from('public_playlists').delete().eq('owner', me()).eq('local_id', localId).select('cover_path'))
+export const unpublishPlaylist = localId => { const uid = me(); return serial(localId, async () => {
+  const rows = must(await supabase.from('public_playlists').delete().eq('owner', uid).eq('local_id', localId).select('cover_path'))
   covers.delete(localId)
   rows?.forEach(r => removeImage(r.cover_path))
-}
+}) }
 export const publicPlaylists = async userId =>
   must(await supabase.from('public_playlists').select('id, name, cover_path, updated_at').eq('owner', userId).order('updated_at', { ascending: false }))
 export const publicPlaylist = async id => must(await supabase.from('public_playlists').select('*').eq('id', id).maybeSingle())
 
-// Keeps published copies in step with the local playlist: publish/unpublish at once on toggle or delete, others debounced 2 s.
-const timers = new Map()
-const fail = e => useStore.getState().toastMsg(e.message || "Couldn't update the public playlist")
-const sync = id => {
+// Keeps published copies in step with the local playlist: publish/unpublish at once on toggle, others debounced 2 s.
+// Edits that couldn't go out (offline, signed out) wait in `dirty` for the next sign-in or reconnect.
+const timers = new Map(), dirty = new Set()
+const toast = m => useStore.getState().toastMsg(m)
+const sync = (id, uid) => {
   clearTimeout(timers.get(id)); timers.delete(id)
   const p = useStore.getState().playlists.find(x => x.id === id)
-  if (p?.public) publishPlaylist(p).catch(fail)
+  if (!p || me() !== uid) return
+  if (!canPublish({ uid, flag: p.public, online: navigator.onLine })) return void (p.public === uid && dirty.add(id))
+  dirty.delete(id)
+  publishPlaylist(p).catch(e => { dirty.add(id); navigator.onLine && toast(e.message || "Couldn't update the public playlist") })
 }
-if (supabase) useStore.subscribe((s, prev) => {
-  if (!s.user || s.playlists === prev.playlists) return
-  for (const pp of prev.playlists) if (pp.public && !s.playlists.some(x => x.id === pp.id)) unpublishPlaylist(pp.id).catch(fail)
-  for (const p of s.playlists) {
-    const o = prev.playlists.find(x => x.id === p.id)
-    if (!o || o === p) continue
-    if (p.public !== o.public) p.public ? sync(p.id) : unpublishPlaylist(p.id).catch(fail)
-    else if (p.public && (p.name !== o.name || p.tracks !== o.tracks)) { clearTimeout(timers.get(p.id)); timers.set(p.id, setTimeout(() => sync(p.id), 2000)) }
-  }
-})
+const flush = () => { const uid = me(); uid && [...dirty].forEach(id => sync(id, uid)) }
+const clearTimers = () => { timers.forEach(clearTimeout); timers.clear() }
+if (supabase) {
+  addEventListener('online', flush)
+  useStore.subscribe((s, prev) => {
+    const uid = s.user?.id
+    if (uid !== prev.user?.id) { clearTimers(); flush() }
+    if (s.playlists === prev.playlists) return
+    for (const p of s.playlists) {
+      const o = prev.playlists.find(x => x.id === p.id)
+      if (!o || o === p) continue
+      if (p.public !== o.public) {
+        if (p.public === uid) { // just made public: failing to publish undoes the toggle
+          clearTimeout(timers.get(p.id))
+          if (canPublish({ uid, flag: p.public, online: navigator.onLine }))
+            publishPlaylist(p).catch(e => { s.updatePlaylist(p.id, { public: false }); toast(`Couldn't make it public: ${e.message}`) })
+          else dirty.add(p.id)
+        } else if (o.public === uid) unpublishPlaylist(p.id).catch(e => toast(e.message || "Couldn't make it private"))
+      } else if (p.public && (p.name !== o.name || p.tracks !== o.tracks)) {
+        const own = p.public
+        if (!uid) { dirty.add(p.id); continue } // signed out: send after the next sign-in
+        if (own !== uid) continue // another account's published playlist: leave it alone
+        clearTimeout(timers.get(p.id)); timers.set(p.id, setTimeout(() => sync(p.id, own), 2000))
+      }
+    }
+    for (const pp of prev.playlists) if (pp.public && pp.public === uid && !s.playlists.some(x => x.id === pp.id)) unpublishPlaylist(pp.id).catch(e => toast(e.message))
+  })
+}

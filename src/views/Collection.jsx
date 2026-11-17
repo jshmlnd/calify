@@ -10,14 +10,14 @@ import { CaliCat } from '../parts/CaliCat'
 
 function useCollection(kind, id) {
   const s = useStore()
-  const owner = { owner: s.name }
+  const owner = { owner: s.name }, uid = s.user?.id
   switch (kind) {
     case 'liked': return { kind, id, name: 'Liked Songs', type: 'Playlist', tracks: s.liked, ...owner }
     case 'local': return { kind, id, name: 'Local Files', type: 'Playlist', tracks: s.local, ...owner, description: 'Music files on this device' }
     case 'history': return { kind, id, name: 'Recently played', type: 'Playlist', tracks: s.history, ...owner }
     case 'playlist': {
       const p = s.playlists.find(x => x.id === id)
-      return p ? { kind, id, name: p.name, description: p.description, type: p.public ? 'Public playlist' : 'Playlist', public: !!p.public, tracks: p.tracks, editable: true, ...owner } : { missing: true }
+      return p ? { kind, id, name: p.name, description: p.description, type: uid && p.public === uid ? 'Public playlist' : 'Playlist', public: !!uid && p.public === uid, tracks: p.tracks, editable: true, ...owner } : { missing: true }
     }
     default: return { missing: true }
   }
@@ -41,7 +41,7 @@ export function Collection({ kind, id }) {
   const menu = e => openMenu(e, [
     { label: 'Add to queue', icon: 'queue', onClick: () => addToQueue(c.tracks) },
     c.editable && { label: 'Edit details', icon: 'edit', onClick: () => setEdit(true) },
-    c.editable && signedIn && { label: c.public ? 'Make private' : 'Make public', onClick: () => updatePlaylist(id, { public: !c.public }) },
+    c.editable && signedIn && { label: c.public ? 'Make private' : 'Make public', onClick: () => updatePlaylist(id, { public: c.public ? false : useStore.getState().user.id }) },
     c.editable && { label: 'Delete', icon: 'trash', onClick: () => confirm(`Delete "${c.name}"? This can't be undone.`) && deletePlaylist(id) },
     kind === 'local' && { label: 'Import more files', icon: 'file', onClick: pickLocalFiles },
     ...(['liked', 'playlist', 'local'].includes(kind) ? itemMenu(item).slice(1) : []),

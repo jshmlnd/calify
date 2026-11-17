@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { publicTracks, cleanPatch, lastPlayedOf, lastPlayedPlan, likeOf, fresh, splitPath, HOUR, SIGN_SECONDS } from '../src/profiledata.js'
+import { publicTracks, canPublish, cleanPatch, lastPlayedOf, lastPlayedPlan, likeOf, fresh, splitPath, HOUR, SIGN_SECONDS } from '../src/profiledata.js'
 import { accentVars, contrast, SURFACE } from '../src/theme.js'
 
 test('cleanPatch trims and enforces name 1–40 and bio ≤ 160', () => {
@@ -71,4 +71,12 @@ test('publicTracks keeps metadata only, caps count and string length', () => {
   assert.equal(out[0].album, '')
   assert.equal(out[0].duration, 13)
   assert.deepEqual(publicTracks(null), [])
+})
+
+test('canPublish needs the signed-in uid to match the flag, and a connection', () => {
+  assert.equal(canPublish({ uid: 'a', flag: 'a' }), true)
+  assert.equal(canPublish({ uid: 'b', flag: 'a' }), false)
+  assert.equal(canPublish({ uid: undefined, flag: 'a' }), false)
+  assert.equal(canPublish({ uid: 'a', flag: false }), false)
+  assert.equal(canPublish({ uid: 'a', flag: 'a', online: false }), false)
 })

@@ -43,3 +43,6 @@ export const MAX_PUBLIC_TRACKS = 500
 export const publicTracks = tracks => (tracks || []).slice(0, MAX_PUBLIC_TRACKS).map(t => ({
   title: cut(t.title, 200), artist: cut(t.artist, 200), album: cut(t.album, 200), duration: Number.isFinite(t.duration) ? Math.round(t.duration) : 0,
 }))
+
+// A playlist's `public` flag is the uid that published it; publish only for that signed-in user and never while offline.
+export const canPublish = ({ uid, flag, online = true }) => !!uid && flag === uid && online !== false

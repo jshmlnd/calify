@@ -71,6 +71,8 @@ export const useStore = create(persist((set, get) => ({
   },
   updatePlaylist: (id, patch) => set(s => ({ playlists: s.playlists.map(p => p.id === id ? { ...p, ...patch } : p) })),
   deletePlaylist: id => {
+    const p = get().playlists.find(x => x.id === id)
+    if (p?.public && p.public !== get().user?.id) return get().toastMsg('Sign in to delete a public playlist, or make it private first')
     set(s => ({ playlists: s.playlists.filter(p => p.id !== id), recents: s.recents.filter(r => r.id !== id) }))
     get().go({ name: 'home' })
     get().toastMsg('Removed from Your Library')
