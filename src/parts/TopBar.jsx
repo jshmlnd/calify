@@ -27,6 +27,7 @@ export const avatarMenu = () => [
   { label: 'Import local files', icon: 'file', onClick: pickLocalFiles },
   { label: 'Private session', icon: 'user', checked: useStore.getState().privateSession, onClick: cmd.privateSession },
   '-',
+  { label: "What's New", onClick: () => useStore.getState().go({ name: 'whatsnew' }) },
   { label: 'About Calify', onClick: cmd.about },
   ...(window.calify ? [{ label: 'Exit', onClick: cmd.exit }] : []),
 ].filter(Boolean)

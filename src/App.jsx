@@ -5,6 +5,7 @@ import { useStore, useRoute } from './store'
 import { MenuHost, Toast, useMobile } from './ui'
 import { onKey } from './commands'
 import { loadLocal } from './local'
+import { APP_VERSION } from './changelog'
 import { TopBar } from './parts/TopBar'
 import { Library } from './parts/Library'
 import { PlayerBar } from './parts/PlayerBar'
@@ -13,7 +14,7 @@ import { FullScreen, MiniWindow, MobileMini, MobileNav, MobileNowPlaying } from 
 import { Home, Section } from './views/Home'
 import { Search } from './views/Search'
 import { Collection } from './views/Collection'
-import { DialogHost, LibraryPage, LyricsView, Settings } from './views/Misc'
+import { DialogHost, LibraryPage, LyricsView, Settings, WhatsNew } from './views/Misc'
 
 function View() {
   const r = useRoute()
@@ -21,6 +22,7 @@ function View() {
     case 'search': return <Search q={r.q} />
     case 'collection': return <Collection key={r.kind + r.id} kind={r.kind} id={r.id} />
     case 'lyrics': return <LyricsView />
+    case 'whatsnew': return <WhatsNew />
     case 'settings': return <Settings />
     case 'library': return <LibraryPage />
     case 'section': return <Section k={r.key} />
@@ -43,7 +45,15 @@ export default function App() {
   const mobile = useMobile()
 
   useEffect(() => {
-    loadLocal().then(({ tracks, art }) => useStore.setState({ local: tracks, localArt: art })).catch(() => {})
+    // Show What's New once per version; a fresh install (nothing stored, empty library) just records it.
+    const welcome = () => {
+      const s = useStore.getState()
+      if (s.lastSeenVersion === APP_VERSION) return
+      const fresh = !s.lastSeenVersion && !s.playlists.length && !s.liked.length && !s.local.length
+      useStore.setState({ lastSeenVersion: APP_VERSION })
+      if (!fresh) s.go({ name: 'whatsnew' })
+    }
+    loadLocal().then(({ tracks, art }) => useStore.setState({ local: tracks, localArt: art })).catch(() => {}).then(welcome)
     window.calify?.zoom(useStore.getState().zoom)
     addEventListener('keydown', onKey)
     const vis = () => document.documentElement.classList.toggle('is-hidden', document.visibilityState === 'hidden')

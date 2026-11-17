@@ -9,6 +9,7 @@ import { pickLocalFiles, cmd } from '../commands'
 import { removeLocal } from '../local'
 import { del } from 'idb-keyval'
 import { CaliCat } from '../parts/CaliCat'
+import { APP_VERSION, CHANGELOG } from '../changelog'
 
 export function LyricsView() {
   const current = useStore(s => s.current)
@@ -40,6 +41,24 @@ export function LibraryPage() {
         <button className="icon-btn" aria-label="Create" onClick={e => openMenu(e, createMenu())}><Icon name="plus" /></button>
       </header>
       <LibraryList big={!mobile} />
+      <div className="view-foot" />
+    </div>
+  )
+}
+
+export function WhatsNew() {
+  return (
+    <div className="view scroll-y pad-view">
+      <div className="empty" style={{ paddingBottom: 0 }}><CaliCat size={96} state="awake" /></div>
+      <h1 className="section-title">What's New</h1>
+      {CHANGELOG.map(e => (
+        <section key={e.version}>
+          <h2>Calify {e.version} <span className="sub">{e.date}</span></h2>
+          {[['New', e.new], ['Fixed', e.fixed]].filter(([, l]) => l.length).map(([h, l]) => (
+            <div key={h}><h3 className="sub">{h}</h3><ul>{l.map(x => <li key={x}>{x}</li>)}</ul></div>
+          ))}
+        </section>
+      ))}
       <div className="view-foot" />
     </div>
   )
@@ -83,7 +102,7 @@ export function Settings() {
       )}
       <section>
         <h2>About</h2>
-        <p className="sub">Calify 1.0.0. Plays your music files. Synced lyrics by LRCLIB.</p>
+        <p className="sub">Calify {APP_VERSION}. Plays your music files. Synced lyrics by LRCLIB.</p>
       </section>
       <div className="view-foot" />
     </div>
@@ -110,7 +129,7 @@ export function DialogHost() {
           <dl className="keys">{KEYS.map(([a, b]) => <div key={a}><dt>{a}</dt><dd><kbd>{b}</kbd></dd></div>)}</dl>
         ) : (
           <div className="about">
-            <p><b>Calify 1.0.0</b></p>
+            <p><b>Calify {APP_VERSION}</b></p>
             <p>Your music, your way. Play your own files and follow along with synced lyrics.</p>
             <p className="sub">Lyrics: LRCLIB · Built with React, Electron and Capacitor.</p>
           </div>

@@ -10,6 +10,7 @@ let toastTimer
 export const useStore = create(persist((set, get) => ({
   // ---- library
   name: 'You',
+  lastSeenVersion: null,
   playlists: [],        // { id, name, description, tracks: [], createdAt }
   liked: [],            // tracks, newest first
   pinned: ['liked'],
