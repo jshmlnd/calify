@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 import { useStore } from './store'
 import { resizeImage } from './image'
-import { cleanPatch, lastPlayedOf, fresh, splitPath, SIGN_SECONDS } from './profiledata.js'
+import { cleanPatch, lastPlayedOf, lastPlayedPlan, fresh, splitPath, SIGN_SECONDS } from './profiledata.js'
 
 const me = () => useStore.getState().user?.id
 const must = ({ data, error }) => { if (error) throw error; return data }
@@ -59,18 +59,23 @@ export function useImageUrl(path) {
   return url
 }
 
-// Called from player.load: once per track change, never in a Private session.
-let lastId, turn = 0
+// Called from player.load. Saves only once a track has stayed current for 5 s, so skip bursts cost nothing.
+let timer, last = null, turn = 0 // last: what was saved this session
 export async function setLastPlayed(track) {
+  clearTimeout(timer)
+  timer = setTimeout(() => saveLastPlayed(track).catch(() => {}), 5000)
+}
+async function saveLastPlayed(track) {
   const s = useStore.getState()
-  if (!supabase || !s.user || s.privateSession || track.id === lastId) return
-  lastId = track.id
+  const plan = lastPlayedPlan({ signedIn: !!(supabase && s.user), privateSession: s.privateSession, online: navigator.onLine, track, prev: last })
+  if (!plan) return
   const my = ++turn, src = s.localArt[track.id] || track.art
-  let art = null
+  let art = plan === 'reuse' ? last.art_path : null
   // Local art is a blob URL; fetch turns it (or any URL) back into a blob to shrink and upload.
-  if (src) art = await fetch(src).then(r => r.blob()).then(b => resizeImage(b, 300)).then(b => uploadImage('cover', b)).catch(() => null)
-  if (my !== turn) return removeImage(art) // a newer track took over while uploading
+  if (plan === 'upload' && src) art = await fetch(src).then(r => r.blob()).then(b => resizeImage(b, 300)).then(b => uploadImage('cover', b)).catch(() => null)
+  if (my !== turn) return plan === 'upload' && removeImage(art) // a slow upload was overtaken by the next save
   const old = useStore.getState().profile?.last_played?.art_path
   await saveProfile({ last_played: lastPlayedOf(track, art) })
+  last = { id: track.id, artist: track.artist, album: track.album, art_path: art }
   if (old !== art) removeImage(old)
 }

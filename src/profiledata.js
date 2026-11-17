@@ -26,3 +26,10 @@ export function cleanPatch(patch) {
 // last_played has a 2000-byte check: keep only what the profile shows, cut long tags.
 const cut = (s, n) => String(s || '').slice(0, n)
 export const lastPlayedOf = (t, art_path = null) => ({ title: cut(t.title, 120), artist: cut(t.artist, 120), art_path })
+
+// setLastPlayed's decision: null = skip, 'reuse' = keep prev's cover (same artist and album), 'upload' = new cover.
+// prev is the last saved { id, artist, album, art_path } this session.
+export function lastPlayedPlan({ signedIn, privateSession, online, track, prev }) {
+  if (!signedIn || privateSession || online === false || !track || track.id === prev?.id) return null
+  return prev?.art_path && track.album && prev.album === track.album && prev.artist === track.artist ? 'reuse' : 'upload'
+}
