@@ -23,14 +23,17 @@ export function pickLocalFiles() {
 export async function removeLocalTrack(id) {
   const t = S().local.find(x => x.id === id)
   if (!t || !confirm(`Remove "${t.title}" from Calify? The original file on your device is not touched.`)) return
-  if (S().current?.id === id) pause()
-  const rest = await removeLocal(id)
-  const art = S().localArt[id]
-  if (art) URL.revokeObjectURL(art)
-  useStore.setState(s => {
-    const { [id]: _, ...localArt } = s.localArt
-    return { ...dropTracks(s, x => x.id === id, new Set()), local: rest, localArt }
-  })
+  try {
+    const rest = await removeLocal(id)
+    if (S().current?.id === id) pause()
+    const art = S().localArt[id]
+    if (art) URL.revokeObjectURL(art)
+    useStore.setState(s => {
+      const localArt = { ...s.localArt }
+      delete localArt[id]
+      return { ...dropTracks(s, x => x.id === id, new Set()), local: rest, localArt }
+    })
+  } catch (e) { return S().toastMsg("Couldn't remove: " + e.message) }
   S().toastMsg('Removed from Calify')
 }
 
