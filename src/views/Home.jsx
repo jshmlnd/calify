@@ -64,6 +64,7 @@ export function Home() {
       <div className="home-bg" />
       <div className="chips home-chips">
         {mobile && <button className="chip-av" onClick={() => go({ name: 'settings' })} aria-label="Settings"><Avatar /></button>}
+        {mobile && <button className="chip x" onClick={() => useStore.setState({ panel: 'together' })} aria-label="Listen together"><Icon name="friends" size={16} /></button>}
         {[['all', 'All'], ['music', 'Music'], ['playlists', 'Playlists']].map(([k, l]) => (
           <button key={k} className={`chip ${filter === k ? 'on' : ''}`} onClick={() => setFilter(k)}>{l}</button>
         ))}

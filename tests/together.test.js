@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { newCode, normalizeCode } from '../src/together/codes.js'
 import { can, admit, canQueue, cleanChat, hostGone, listenerBlocked, hostOnly, BLOCKED_MSG, MAX_CHAT, queueFull, MAX_QUEUED } from '../src/together/rules.js'
-import { membersFrom, forMe, joinDecision, joinError, chatMsg, addChat, libraryMeta, chunks, libraryPart, hostPos, stereo } from '../src/together/state.js'
+import { membersFrom, forMe, joinDecision, joinError, chatMsg, addChat, libraryMeta, chunks, libraryPart, hostPos, stereo, artOf, nextMeta, MAX_ART } from '../src/together/state.js'
 
 test('newCode pads to 4 digits', () => {
   assert.equal(newCode(() => 0), 'CALI-0000')
@@ -81,27 +81,33 @@ test('forMe and joinDecision', () => {
   assert.equal(joinError(null), "The host didn't let you in")
 })
 
-test('chatMsg cleans input; only the host can send events; addChat caps', () => {
-  assert.equal(chatMsg({ from: 'b', text: '   ' }, 'a'), null)
-  const m = chatMsg({ id: 'x', from: 'b', name: 'Mia', text: ' hi  there ', at: 5, kind: 'event' }, 'a')
+test('chatMsg cleans input; name comes from the caller (presence), not the payload; only the host can send events; addChat caps', () => {
+  assert.equal(chatMsg({ from: 'b', text: '   ' }, 'a', 'Mia'), null)
+  const m = chatMsg({ id: 'x', from: 'b', name: 'The Host', text: ' hi  there ', at: 5, kind: 'event' }, 'a', 'Mia')
   assert.deepEqual(m, { id: 'x', from: 'b', name: 'Mia', text: 'hi there', at: 5, kind: 'msg' })
-  assert.equal(chatMsg({ id: 'y', from: 'a', name: 'Jo', text: 'Mia joined', at: 1, kind: 'event' }, 'a').kind, 'event')
-  assert.equal(chatMsg({ from: 'b', name: 'x'.repeat(99), text: 'hi' }, 'a').name.length, 40)
+  assert.equal(chatMsg({ id: 'y', from: 'a', name: 'Jo', text: 'Mia joined', at: 1, kind: 'event' }, 'a', 'Jo').kind, 'event')
+  assert.equal(chatMsg({ from: 'b', text: 'hi' }, 'a', 'x'.repeat(99)).name.length, 40)
+  assert.equal(chatMsg({ from: 'b', text: 'hi' }, 'a').name, 'Someone')
   let c = []
   for (let i = 0; i < 205; i++) c = addChat(c, { id: i })
   assert.equal(c.length, 200)
   assert.equal(c[0].id, 5)
 })
 
-test('library: metadata only, chunked by 200, reassembled', () => {
+test('library: metadata only, chunked by size under the 64 KB send cap, reassembled', () => {
   const tracks = Array.from({ length: 450 }, (_, i) => ({ id: 'l:' + i, title: 't' + i, artist: 'a', album: 'b', duration: 3, source: 'local', lrc: 'x' }))
-  const parts = chunks(libraryMeta(tracks), 200)
-  assert.deepEqual(parts.map(p => p.length), [200, 200, 50])
+  const parts = chunks(libraryMeta(tracks))
+  assert.equal(parts.length, 1)
   assert.deepEqual(Object.keys(parts[0][0]), ['id', 'title', 'artist', 'album', 'duration'])
+  // Worst case: every field at the 300-char cap, in 3-byte UTF-8 characters.
+  const big = libraryMeta(Array.from({ length: 450 }, (_, i) => ({ id: i + '€'.repeat(300), title: '€'.repeat(300), artist: '€'.repeat(300), album: '€'.repeat(300), duration: 1 })))
+  const bigParts = chunks(big)
+  assert.ok(bigParts.length > 1)
+  for (const p of bigParts) assert.ok(new TextEncoder().encode(JSON.stringify({ to: 'x', part: 99, parts: 99, tracks: p })).length < 65536 - 4096)
   let st = { buf: [], lib: null }
-  parts.forEach((p, part) => { st = libraryPart(st.buf, { part, parts: parts.length, tracks: p }) })
-  assert.equal(st.lib.length, 450)
-  assert.deepEqual(chunks([], 200), [[]])
+  bigParts.forEach((p, part) => { st = libraryPart(st.buf, { part, parts: bigParts.length, tracks: p }) })
+  assert.deepEqual(st.lib, big)
+  assert.deepEqual(chunks([]), [[]])
   assert.deepEqual(libraryPart([], { part: 0, parts: 1, tracks: [] }).lib, [])
 })
 
@@ -132,4 +138,31 @@ test('queueFull caps songs per listener', () => {
   assert.equal(queueFull(q, 'b'), true)
   assert.equal(queueFull(q.slice(1), 'b'), false)
   assert.equal(queueFull(q, 'c'), false)
+})
+
+test('artOf accepts only small data: images', () => {
+  const ok = 'data:image/webp;base64,UklGRg=='
+  assert.equal(artOf(ok), ok)
+  assert.equal(artOf('data:image/jpeg;base64,/9j/4AAQ'), 'data:image/jpeg;base64,/9j/4AAQ')
+  for (const bad of ['https://evil.example/x.png', 'data:image/svg+xml;base64,PHN2Zz4=', 'data:text/html;base64,PGI+', 'data:image/png;base64,"x', null, 5, {}])
+    assert.equal(artOf(bad), null)
+  assert.equal(artOf('data:image/png;base64,' + 'A'.repeat(MAX_ART)), null)
+})
+
+test('nextMeta: up to 10 rows of title, artist, added by; coerces untrusted input', () => {
+  const q = Array.from({ length: 12 }, (_, i) => ({ id: 'l:' + i, title: 't' + i, artist: 'a', addedBy: i ? 'Mia' : undefined, src: 'blob:x' }))
+  const n = nextMeta(q)
+  assert.equal(n.length, 10)
+  assert.deepEqual(n[0], { title: 't0', artist: 'a', addedBy: '' })
+  assert.deepEqual(n[1], { title: 't1', artist: 'a', addedBy: 'Mia' })
+  assert.deepEqual(nextMeta('nope'), [])
+  assert.equal(nextMeta([{ addedBy: 'x'.repeat(99) }])[0].addedBy.length, 40)
+})
+
+test('a worst-case `now` (art at the cap, 10 long Up Next rows, long track) fits together_send\'s 64 KB', () => {
+  const long = '€'.repeat(300), t = { id: long, title: long, artist: long, album: long, duration: 1 }
+  const art = 'data:image/webp;base64,' + 'A'.repeat(MAX_ART - 30)
+  assert.equal(artOf(art), art)
+  const now = { track: libraryMeta([t])[0], art, next: nextMeta(Array(12).fill({ ...t, addedBy: long })), playing: true, t: 123.456 }
+  assert.ok(new TextEncoder().encode(JSON.stringify(now)).length < 65536 - 2048)
 })

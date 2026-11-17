@@ -55,6 +55,14 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "shortcutName": "Calify"
-    }
+    },
+    "protocols": [
+      {
+        "name": "Calify",
+        "schemes": [
+          "calify"
+        ]
+      }
+    ]
   }
 }

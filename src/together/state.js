@@ -17,22 +17,42 @@ export const joinDecision = (members, id) => members.some(m => m.id === id) ? 'm
 export const joinError = ans => ans?.ok ? null : ans?.reason === 'full' ? 'Session is full' : "The host didn't let you in"
 
 // Incoming chat comes from other clients: clean it, and only the host may post events.
-export function chatMsg(p, hostId) {
+// `name` is the sender's name as we know it (presence), never the payload's, so nobody can post as someone else.
+export function chatMsg(p, hostId, name) {
   const text = cleanChat(p?.text)
   if (!text) return null
-  return { id: String(p.id ?? Math.random()).slice(0, 40), from: String(p.from), name: String(p.name ?? '').slice(0, 40) || 'Someone', text, at: Number(p.at) || Date.now(), kind: p.kind === 'event' && p.from === hostId ? 'event' : 'msg' }
+  return { id: String(p.id ?? Math.random()).slice(0, 40), from: String(p.from), name: String(name ?? '').slice(0, 40) || 'Someone', text, at: Number(p.at) || Date.now(), kind: p.kind === 'event' && p.from === hostId ? 'event' : 'msg' }
 }
 export const addChat = (chat, msg) => [...chat, msg].slice(-200)
 
 // Also used on payloads from the host, so every field is coerced and capped.
 const str = v => String(v ?? '').slice(0, 300)
 export const libraryMeta = tracks => tracks.map(t => ({ id: str(t?.id), title: str(t?.title), artist: str(t?.artist), album: str(t?.album), duration: Math.max(0, Number(t?.duration) || 0) }))
-export const chunks = (list, n) => list.length ? Array.from({ length: Math.ceil(list.length / n) }, (_, i) => list.slice(i * n, i * n + n)) : [[]]
+// together_send refuses payloads over 64 KB, so parts are cut by encoded size (40 KB leaves room for the envelope).
+const enc = new TextEncoder()
+export function chunks(list, max = 40000) {
+  const out = [[]]
+  let size = 0
+  for (const t of list) {
+    const n = enc.encode(JSON.stringify(t)).length + 1
+    if (size + n > max && out.at(-1).length) { out.push([]); size = 0 }
+    out.at(-1).push(t); size += n
+  }
+  return out
+}
 // Reassembles `library` parts (in order on one channel); part 0 starts over.
 export function libraryPart(buf, { part, parts, tracks }) {
   const next = [...(part === 0 ? [] : buf), ...tracks]
   return part === parts - 1 ? { buf: [], lib: next } : { buf: next, lib: null }
 }
+
+// The host's Up Next as listeners see it: a few rows, text only.
+export const nextMeta = list => (Array.isArray(list) ? list : []).slice(0, 10).map(t => ({ title: str(t?.title), artist: str(t?.artist), addedBy: String(t?.addedBy ?? '').slice(0, 40) }))
+
+// Album art in `now` from the host: only a small inline image (never a URL that would make listeners fetch from elsewhere).
+// 40 K chars + 10 worst-case Up Next rows + the track stay under together_send's 64 KB.
+export const MAX_ART = 40000
+export const artOf = v => typeof v === 'string' && v.length < MAX_ART && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(v) ? v : null
 
 // hostNow.at is the listener's own receive time, so clocks needn't agree.
 export function hostPos(n, now) {

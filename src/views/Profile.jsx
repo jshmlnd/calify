@@ -4,6 +4,7 @@ import { Spinner, Shelf, useAsync, TrackList, fmtLong } from '../ui'
 import { Icon } from '../icons'
 import { Avatar } from '../parts/TopBar'
 import { THEMES, ACCENTS, accentVars, readableAccent } from '../theme'
+import { inviteUser } from '../together/session'
 import { getProfile, counts as getCounts, follow, unfollow, isFollowing, saveProfile, publicPlaylists, publicPlaylist, uploadImage, removeImage, useImageUrl } from '../social'
 import { resizeImage } from '../image'
 
@@ -59,7 +60,22 @@ function FollowButton({ id, onChange }) {
     try { await (v ? unfollow : follow)(id) } catch (e) { setOn(v); onChange(v ? 1 : -1); useStore.getState().toastMsg(e.message) }
     setBusy(false)
   }
-  return <button className="outline-btn" disabled={busy} aria-pressed={v} onClick={click}>{v ? 'Following' : 'Follow'}</button>
+  return <>
+    <button className="outline-btn" disabled={busy} aria-pressed={v} onClick={click}>{v ? 'Following' : 'Follow'}</button>
+    {v && <InviteButton id={id} />}
+  </>
+}
+
+// Listen together: the host invites people it follows (the server checks both); the invite counts as approval.
+function InviteButton({ id }) {
+  const show = useStore(s => s.together?.role === 'host' && !s.together.members.some(m => m.id === id))
+  const [st, setSt] = useState(null) // 'busy' | 'sent'
+  if (!show) return null
+  const click = () => {
+    setSt('busy')
+    inviteUser(id).then(() => { setSt('sent'); useStore.getState().toastMsg('Invite sent') }, e => { setSt(null); useStore.getState().toastMsg(e.message) })
+  }
+  return <button className="outline-btn" disabled={!!st} onClick={click}>{st === 'sent' ? 'Invited' : 'Invite'}</button>
 }
 
 // Shown, not playable.

@@ -103,6 +103,8 @@ export function addToQueue(tracks, addedBy) {
   S.setState(s => ({ upNext: [...s.upNext, ...(addedBy ? tracks.map(t => ({ ...t, addedBy })) : tracks)] }))
   if (!addedBy) S.getState().toastMsg('Added to queue')
 }
+// Listen together host: the × on an Up Next row.
+export const removeFromUpNext = i => S.setState(s => ({ upNext: s.upNext.filter((_, k) => k !== i) }))
 export const playFromQueue = guard(i => {
   const t = S.getState().upNext[i]
   S.setState(s => ({ upNext: s.upNext.slice(i + 1) }))

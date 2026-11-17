@@ -5,6 +5,15 @@ const http = require('http')
 let win, normalBounds
 if (!app.requestSingleInstanceLock()) app.quit()
 
+// Listen together links: calify://join/CALI-0000 (the renderer validates the code).
+const joinCode = argv => argv.map(a => /^calify:\/\/join\/([^/?#]+)/i.exec(String(a))?.[1]).find(Boolean)
+let pendingJoin = joinCode(process.argv)   // started by a link
+const sendJoin = code => { if (!code) return; if (win) { if (win.isMinimized()) win.restore(); win.focus(); win.webContents.send('join', code) } else pendingJoin = code }
+// Packaged only: in dev this would point calify:// at the bare Electron binary. The NSIS installer registers it too.
+if (app.isPackaged) app.setAsDefaultProtocolClient('calify')
+app.on('open-url', (e, url) => { e.preventDefault(); sendJoin(joinCode([url])) })   // macOS
+ipcMain.handle('join-pending', () => { const c = pendingJoin; pendingJoin = null; return c })
+
 function create() {
   win = new BrowserWindow({
     width: 1440, height: 920, minWidth: 820, minHeight: 600,
@@ -60,6 +69,6 @@ ipcMain.handle('auth', (_, url) => new Promise((resolve, reject) => {
   srv.listen(43821, '127.0.0.1', () => shell.openExternal(url))
 }))
 
-app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus() } })
+app.on('second-instance', (_, argv) => { if (win) { if (win.isMinimized()) win.restore(); win.focus() } sendJoin(joinCode(argv)) })
 app.whenReady().then(create)
 app.on('window-all-closed', () => app.quit())

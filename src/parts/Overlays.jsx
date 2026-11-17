@@ -33,6 +33,7 @@ export function MobileNowPlaying() {
       <Controls big />
       <div className="m-np-tools">
         <button className="icon-btn" aria-label="Connect to a device" onClick={() => { close(); setPanel('devices') }}><Icon name="devices" size={20} /></button>
+        <button className="icon-btn" aria-label="Listen together" onClick={() => { close(); setPanel('together') }}><Icon name="friends" size={20} /></button>
         <button className="icon-btn" aria-label="Queue" onClick={() => { close(); setPanel('queue') }}><Icon name="queue" size={20} /></button>
       </div>
       {lyrics.status === 'ok' && (

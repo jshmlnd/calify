@@ -2,14 +2,16 @@
 // - together:CODE:lobby  any signed-in user while the session is active: join-req → host, join-ans → joiner.
 // - together:CODE        host + session_members only: presence { id, name, avatar_path, role } and
 //                         chat, queue-req, queued, now, library-req, library, rtc, end.
+// - user:<id>            only that user: `invite` { code, from } from together_invite (migration 20261118000001).
 // Clients can't broadcast directly: every send goes through the together_send RPC, which checks the sender's
 // role, rate-limits, and stamps `from` with the sender's user id (so `from` can be trusted here).
 import { supabase } from '../supabase'
 import { useStore } from '../store'
 import { audio, addToQueue, usePos } from '../player'
+import { resizeImage } from '../image'
 import { newCode, normalizeCode } from './codes'
 import { JOIN_TIMEOUT_MS, hostGone, canQueue, cleanChat, queueFull } from './rules'
-import { membersFrom, forMe, joinDecision, joinError, chatMsg, addChat, libraryMeta, chunks, libraryPart, hostPos } from './state'
+import { membersFrom, forMe, joinDecision, joinError, chatMsg, addChat, libraryMeta, chunks, libraryPart, hostPos, nextMeta, artOf } from './state'
 import * as rtc from './rtc'
 
 const S = () => useStore.getState()
@@ -19,8 +21,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 const OFFLINE = "Couldn't reach Calify. Check your connection."
 const fromHost = list => list.map(t => ({ ...t, fromHost: true }))   // metadata only: can't be played, liked or saved here
 
-let ch, lobby, me, meta, code, sessionId, busy, waiting, timers = [], hooks = [], libBuf = [], hostSeenAt = 0, lastQueue = 0
-const memberIds = new Set()     // host: listeners it let in (mirrors session_members)
+let ch, lobby, me, meta, code, sessionId, busy, waiting, libTimer, timers = [], hooks = [], libBuf = [], hostSeenAt = 0, lastQueue = 0
+const memberIds = new Set()     // host: listeners it let in or invited (mirrors session_members)
+const invited = new Set()       // host: invited, not yet joined
 const libSending = new Set()    // host: one library send in flight per listener
 
 // Resolves to null, or the error (callers that care check it).
@@ -43,14 +46,32 @@ function event(text, name = 'chat') {
   send(name, m)
 }
 
-const nowMsg = () => {
-  const { current } = S()
-  return { track: current ? libraryMeta([current])[0] : null, playing: !audio.paused, t: audio.currentTime || 0 }
+// Host: the current song's art as a small inline image, made once per song and sent once per song
+// (again when someone new arrives); 5-second progress updates go without it.
+let art = { id: null, url: null }, artSent = null
+const dataUrl = b => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(b) })
+async function prepArt(t) {
+  if (!t || art.id === t.id) return
+  const mine = art = { id: t.id, url: null }, src = S().localArt[t.id] || t.art
+  if (!src) return
+  mine.url = artOf(await fetch(src).then(r => r.blob()).then(b => resizeImage(b, 200)).then(dataUrl).catch(() => null))
+  if (mine.url && art === mine && S().current?.id === t.id) sendNow()
 }
-const sendNow = () => T()?.role === 'host' && send('now', nowMsg())
+function nowMsg() {
+  const { current, upNext } = S()
+  prepArt(current)
+  const withArt = current && art.id === current.id && art.url && artSent !== current.id
+  if (withArt) artSent = current.id
+  return { track: current ? libraryMeta([current])[0] : null, art: withArt ? art.url : null, next: nextMeta(upNext), playing: !audio.paused, t: audio.currentTime || 0 }
+}
+function sendNow() {
+  if (T()?.role !== 'host') return
+  const m = nowMsg()
+  send('now', m).then(e => e && m.art && (artSent = null))   // art didn't go: try again with the next update
+}
 
 function onChat(p) {
-  const m = chatMsg(p, T().hostId)
+  const m = chatMsg(p, T().hostId, nameOf(p.from))
   if (m) setT(t => ({ chat: addChat(t.chat, m) }))
 }
 
@@ -63,7 +84,7 @@ function onPresence() {
   setT({ members })
   if (t.role !== 'host') return
   // A listener appears on the main channel once let in (or back after a drop): send them audio.
-  for (const m of members) if (m.id !== me.id && !rtc.hasPeer(m.id)) { rtc.offerTo(m.id); sendNow() }
+  for (const m of members) if (m.id !== me.id && !rtc.hasPeer(m.id)) { rtc.offerTo(m.id); artSent = null; sendNow() }
 }
 
 // ---- main channel (ignored until we're in: host started, or listener let in)
@@ -82,22 +103,28 @@ const on = {
     if (T().role !== 'host' || !memberIds.has(p.from) || libSending.has(p.from)) return
     libSending.add(p.from)
     try {
-      const parts = chunks(libraryMeta(S().local), 200)
+      const parts = chunks(libraryMeta(S().local))
       // shortcut: paced to stay under Realtime's message rate; fine to ~20k songs.
-      for (let part = 0; part < parts.length && T(); part++) { await send('library', { to: p.from, part, parts: parts.length, tracks: parts[part] }); await sleep(100) }
+      for (let part = 0; part < parts.length && T(); part++) {
+        if (await send('library', { to: p.from, part, parts: parts.length, tracks: parts[part] })) return send('library', { to: p.from, failed: true })
+        await sleep(100)
+      }
     } finally { libSending.delete(p.from) }
   },
   library: p => {
-    if (T().role !== 'listener' || !forMe(p, me.id) || p.from !== T().hostId || !Array.isArray(p.tracks)) return
+    if (T().role !== 'listener' || !forMe(p, me.id) || p.from !== T().hostId) return
+    if (p.failed || !Array.isArray(p.tracks)) { libBuf = []; return setT({ libError: true }) }
     const r = libraryPart(libBuf, { part: +p.part, parts: +p.parts, tracks: p.tracks })
     libBuf = r.buf
-    if (r.lib) setT({ hostLibrary: fromHost(libraryMeta(r.lib)) })
+    if (r.lib) { clearTimeout(libTimer); setT({ hostLibrary: fromHost(libraryMeta(r.lib)), libError: false }) }
   },
   now: p => {
     if (T().role !== 'listener' || p.from !== T().hostId) return
-    const same = S().current?.id === String(p.track?.id)   // keep the object so the UI doesn't churn every 5 s
-    const track = !p.track?.id ? null : same ? S().current : fromHost(libraryMeta([p.track]))[0]
-    const hostNow = { track, playing: !!p.playing, t: Number(p.t) || 0, at: Date.now() }
+    const prev = S().current, same = prev?.id === String(p.track?.id)
+    const pic = artOf(p.art) || (same ? prev.art : null)   // art comes once per song
+    // Keep the object while nothing changed, so the UI doesn't churn every 5 s.
+    const track = !p.track?.id ? null : same && prev.art === pic ? prev : { ...fromHost(libraryMeta([p.track]))[0], art: pic }
+    const hostNow = { track, next: nextMeta(p.next), playing: !!p.playing, t: Number(p.t) || 0, at: Date.now() }
     setT({ hostNow })
     // Mirror into the player state so the player bar, Now Playing and lyrics show the host's song
     // (store.js persists the listener's own track instead).
@@ -125,9 +152,15 @@ const lobbyOn = {
   'join-req': p => {
     if (T()?.role !== 'host') return
     const d = joinDecision([{ id: me.id }, ...[...memberIds].map(id => ({ id }))], p.from)
+    const name = String(p.name ?? '').slice(0, 40) || 'Someone'
     if (d === 'full') return send('join-ans', { to: p.from, ok: false, reason: 'full' })
-    if (d === 'member') { rtc.closePeer(p.from); return send('join-ans', { to: p.from, ok: true }) }   // rejoin: fresh audio once they're back in presence
-    const req = { id: String(p.from), name: String(p.name ?? '').slice(0, 40) || 'Someone' }
+    if (d === 'member') {   // invited (pre-approved, whatever the payload says), or a rejoin: fresh audio once they're in presence
+      rtc.closePeer(p.from)
+      send('join-ans', { to: p.from, ok: true })
+      if (invited.delete(p.from)) event(`${name} joined`)
+      return
+    }
+    const req = { id: String(p.from), name }
     setT(t => ({ pending: [...t.pending.filter(x => x.id !== req.id), req] }))
     later(() => setT(t => ({ pending: t.pending.filter(x => x !== req) })), JOIN_TIMEOUT_MS)
   },
@@ -151,8 +184,8 @@ async function teardown() {
   hooks.forEach(([e, fn]) => audio.removeEventListener(e, fn)); hooks = []
   rtc.close()
   const cs = [ch, lobby], t = T()
-  ch = lobby = meta = waiting = null; libBuf = []
-  memberIds.clear(); libSending.clear()
+  ch = lobby = meta = waiting = null; libBuf = []; art = { id: null, url: null }; artSent = null
+  memberIds.clear(); invited.clear(); libSending.clear()
   if (t?.role === 'listener') {
     useStore.setState({ current: t.saved, playing: false })
     usePos.setState({ t: audio.currentTime || 0, d: Number.isFinite(audio.duration) ? audio.duration : t.saved?.duration || 0 })
@@ -186,7 +219,7 @@ export const startSession = once(async () => {
   if (!row) throw new Error("Couldn't start a session. Try again.")
   sessionId = row.id
   code = row.code
-  useStore.setState({ together: { code, role: 'host', hostId: me.id, members: [me], pending: [], chat: [], hostLibrary: null, hostNow: null, saved: null } })
+  useStore.setState({ together: { code, role: 'host', hostId: me.id, members: [me], pending: [], chat: [], hostLibrary: null, libError: false, hostNow: null, saved: null } })
   meta = { ...me, role: 'host' }
   rtc.init(m => send('rtc', m), 'host')
   try {
@@ -209,12 +242,30 @@ export async function answerJoin(userId, allow) {
   if (error?.hint === 'full') return send('join-ans', { to: userId, ok: false, reason: 'full' })
   if (error && error.code !== '23505') return S().toastMsg("Couldn't let them in. Check your connection.")
   memberIds.add(userId)
+  invited.delete(userId)
   await send('join-ans', { to: userId, ok: true })
   event(`${req?.name || 'Someone'} joined`)   // audio starts when they show up in presence (onPresence)
 }
 
+// Pre-approves someone the host follows (together_invite adds their member row) and pings their user channel.
+// Not taken up within JOIN_TIMEOUT_MS, the invite lapses and their row goes, so it doesn't hold a seat.
+export async function inviteUser(userId) {
+  if (T()?.role !== 'host') throw new Error('Start a session first')
+  if (memberIds.has(userId)) throw new Error(invited.has(userId) ? 'Already invited' : "They're already here")
+  const { error } = await supabase.rpc('together_invite', { p_target: userId }).then(r => r, e => ({ error: e }))
+  if (error) throw new Error(error.hint === 'full' ? 'Session is full' : error.hint === 'rate' ? 'Wait a moment, then try again' : error.code === '42501' ? error.message : OFFLINE)
+  memberIds.add(userId); invited.add(userId)
+  const sid = sessionId
+  later(() => {
+    if (!invited.delete(userId)) return
+    memberIds.delete(userId)
+    supabase.from('session_members').delete().match({ session_id: sid, user_id: userId }).then(() => {}, () => {})
+  }, JOIN_TIMEOUT_MS)
+}
+
 // ---- listener
-export const joinSession = once(async input => {
+// invited: answering an invite (the host lets invitees straight in; it checks its own list, not this flag).
+export const joinSession = once(async (input, { invited } = {}) => {
   if (T()) throw new Error('Leave this session first')
   const c = normalizeCode(input)
   if (!c) throw new Error("That doesn't look like a session code")
@@ -230,7 +281,8 @@ export const joinSession = once(async input => {
   try {
     lobby = await open(`together:${code}:lobby`, { 'join-ans': p => forMe(p, me.id) && p.from === row.host && waiting?.(p) })
   } catch (e) { await teardown(); throw e }
-  const sent = await send('join-req', { name: me.name, avatar_path: me.avatar_path })
+  if (!waiting) return teardown()   // cancelled while the lobby was opening
+  const sent = await send('join-req', { name: me.name, avatar_path: me.avatar_path, invited: !!invited })
   if (sent) { await teardown(); throw new Error(sent.hint === 'rate' ? 'Wait a moment, then try again' : OFFLINE) }
   const timer = later(() => waiting?.(null), JOIN_TIMEOUT_MS)
   const ans = await answered
@@ -243,7 +295,7 @@ export const joinSession = once(async input => {
   waiting = null
   const saved = S().current
   audio.pause()
-  useStore.setState({ together: { code, role: 'listener', hostId: row.host, members: [], pending: [], chat: [], hostLibrary: null, hostNow: null, saved } })
+  useStore.setState({ together: { code, role: 'listener', hostId: row.host, members: [], pending: [], chat: [], hostLibrary: null, libError: false, hostNow: null, saved } })
   rtc.init(m => send('rtc', m), 'listener')
   meta = { ...me, role: 'listener' }
   try { ch = await open(`together:${code}`, on) } catch (e) { await teardown(); throw e }
@@ -273,11 +325,20 @@ export async function requestQueue(trackId) {
   const e = await send('queue-req', { trackId })
   S().toastMsg(e ? (e.hint === 'rate' ? 'Wait a moment, then try again' : OFFLINE) : 'Sent to the host')
 }
-export const requestLibrary = () => T()?.role === 'listener' && send('library-req')
+// The host answers in parts; no complete library within 30 s (host gone quiet, a send refused) shows an error.
+export async function requestLibrary() {
+  if (T()?.role !== 'listener') return
+  libBuf = []
+  clearTimeout(libTimer)
+  setT({ libError: false })
+  const e = await send('library-req')
+  if (e) { setT({ libError: true }); return e.hint === 'rate' && S().toastMsg('Wait a moment, then try again') }
+  libTimer = later(() => T() && !T().hostLibrary && setT({ libError: true }), 30000)
+}
 
 // ---- leaving: the host ends it for everyone; a listener just goes.
 export async function leaveSession() {
-  if (waiting) return waiting({ ok: false, reason: 'cancelled' })   // still waiting for the host: joinSession tears down
+  if (waiting) { const w = waiting; waiting = null; return w({ ok: false, reason: 'cancelled' }) }   // still joining: joinSession tears down
   const t = T()
   if (!t) return
   await send('end')
@@ -288,4 +349,31 @@ export async function leaveSession() {
 
 // Signing out or switching account leaves the session; closing the window tells the others right away.
 useStore.subscribe((s, p) => s.user?.id !== p.user?.id && T() && leaveSession())
+useStore.subscribe((s, p) => s.upNext !== p.upNext && sendNow())   // listeners see the host's Up Next
 addEventListener('pagehide', () => T() && send('end'))
+
+// ---- invites: user:<my id>, only while signed in and the app is visible (battery: no idle socket in the background).
+let inv, invFor
+async function syncInvites() {
+  const uid = supabase && document.visibilityState === 'visible' ? S().user?.id || null : null
+  if (uid === invFor) return
+  invFor = uid
+  if (inv) { const c = inv; inv = null; await supabase.removeChannel(c).catch(() => {}) }
+  if (!uid) return
+  await supabase.realtime.setAuth().catch(() => {})
+  if (invFor !== uid || inv) return   // changed while we waited
+  inv = supabase.channel(`user:${uid}`, { config: { private: true } })
+    .on('broadcast', { event: 'invite' }, ({ payload }) => onInvite(payload))
+    .subscribe()
+}
+async function onInvite(p) {
+  const c = normalizeCode(p?.code)
+  if (!c || T() || typeof p.from !== 'string') return
+  const { data } = await supabase.from('profiles').select('name').eq('id', p.from).maybeSingle().then(r => r, () => ({}))
+  const invite = { code: c, from: p.from, name: String(data?.name ?? '').slice(0, 40) || 'Someone' }
+  useStore.setState({ invite })
+  setTimeout(() => S().invite === invite && useStore.setState({ invite: null }), JOIN_TIMEOUT_MS)   // the host's invite lapses then too
+}
+document.addEventListener('visibilitychange', syncInvites)
+useStore.subscribe((s, p) => s.user?.id !== p.user?.id && syncInvites())
+syncInvites()

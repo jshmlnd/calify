@@ -12,6 +12,7 @@ import { TopBar } from './parts/TopBar'
 import { Library } from './parts/Library'
 import { PlayerBar } from './parts/PlayerBar'
 import { RightPanel } from './parts/RightPanel'
+import { InvitePrompt, join } from './parts/Together'
 import { FullScreen, MiniWindow, MobileMini, MobileNav, MobileNowPlaying } from './parts/Overlays'
 import { Home, Section } from './views/Home'
 import { Search } from './views/Search'
@@ -66,6 +67,7 @@ export default function App() {
     loadLocal().then(({ tracks, art }) => useStore.setState({ local: tracks, localArt: art })).catch(() => {}).then(welcome)
     window.calify?.zoom(useStore.getState().zoom)
     initAuth()
+    const offJoin = window.calify?.onJoin?.(join)   // calify://join/CODE handed over by the Electron main process
     addEventListener('keydown', onKey)
     const vis = () => document.documentElement.classList.toggle('is-hidden', document.visibilityState === 'hidden')
     document.addEventListener('visibilitychange', vis)
@@ -78,11 +80,14 @@ export default function App() {
         else if (s.navI > 0) s.back()
         else CapApp.minimizeApp()
       })
+      const joinUrl = url => url?.startsWith('calify://join/') && join(url.slice(14).split(/[/?#]/)[0])
       CapApp.addListener('appUrlOpen', ({ url }) => {
         if (url.startsWith('calify://auth')) finishSignIn(url).catch(e => useStore.getState().toastMsg(e.message))
+        else joinUrl(url)
       })
+      CapApp.getLaunchUrl().then(r => joinUrl(r?.url), () => {})   // appUrlOpen only covers links that arrive while Calify runs
     }
-    return () => { removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', vis) }
+    return () => { removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', vis); offJoin?.() }
   }, [])
 
   if (mini) return <MiniWindow />
@@ -94,7 +99,7 @@ export default function App() {
       <MobileNav />
       <MobileNowPlaying />
       {panel && <div className="m-panel"><RightPanel /></div>}
-      <MenuHost /><Toast /><DialogHost />
+      <MenuHost /><Toast /><DialogHost /><InvitePrompt />
     </div>
   )
 
@@ -109,7 +114,7 @@ export default function App() {
       </div>
       <PlayerBar />
       {fullscreen && <FullScreen />}
-      <MenuHost /><Toast /><DialogHost />
+      <MenuHost /><Toast /><DialogHost /><InvitePrompt />
     </div>
   )
 }

@@ -76,7 +76,7 @@ export function TopBar() {
         <SearchBox />
       </div>
       <div className="tb-side tb-right">
-        <button className={`icon-btn nodrag ${panel === 'friends' ? 'on' : ''}`} aria-label="Friend Activity" title="Friend Activity" onClick={() => setPanel('friends')}><Icon name="friends" size={20} /></button>
+        <button className={`icon-btn nodrag ${panel === 'together' ? 'on' : ''}`} aria-label="Listen together" title="Listen together" onClick={() => setPanel('together')}><Icon name="friends" size={20} /></button>
         <button className="avatar-btn nodrag" aria-label="Account" title="Account" onClick={e => openMenu(e, avatarMenu())}><Avatar /></button>
       </div>
     </header>

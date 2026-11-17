@@ -383,16 +383,34 @@ kbd { font: 600 11px var(--font); color: var(--sub); border: 1px solid var(--s2)
 .dev-tip b { font-weight: 500; font-size: 16px; }
 .dev-row { display: flex; align-items: center; gap: 16px; padding: 12px 16px; margin: 0 8px; border-radius: 8px; text-align: left; font-size: 16px; }
 .dev-row:hover { background: var(--hover-2); }
+/* Listen together */
+.tg { display: flex; flex-direction: column; }
+.tg-body { flex: 1; min-height: 0; padding: 0 8px 8px; }
+.tg-idle { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px 24px; text-align: center; }
+.tg-idle p, .tg-note { color: var(--sub); font-size: 14px; line-height: 1.4; }
+.tg-note { padding: 4px 8px 8px; }
+.tg-idle .spinner { margin: 16px auto 0; }
+.tg-join { display: flex; align-items: flex-end; gap: 8px; width: 100%; text-align: left; }
+.tg-join .field { flex: 1; }
+.tg-tabs { padding-top: 0; }
+.tg-members { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 4px 8px 12px; }
+.tg-member { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.tg-member small { color: var(--sub); font-weight: 400; }
+.tg-pending { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; padding: 12px; border-radius: 8px; background: var(--elev); }
+.tg-pending span { flex: 1; min-width: 0; }
+.tg-h { font-size: 14px; font-weight: 700; color: var(--sub); padding: 12px 8px 4px; }
+.tg-chat { border-top: 1px solid var(--s2); margin-top: 12px; padding: 12px 8px 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.tg-chat b { font-weight: 700; }
+.tg-event { color: var(--sub); font-style: italic; }
+.tg-input { display: flex; gap: 8px; padding: 8px 16px; }
+.tg-input input { flex: 1; min-width: 0; background: var(--s4); border: 1px solid transparent; border-radius: 500px; padding: 8px 14px; font-size: 14px; outline: 0; }
+.tg-input input:focus { border-color: var(--s2); background: var(--s5); }
+.tg-actions { display: flex; gap: 8px; justify-content: space-between; padding: 8px 16px 16px; }
+.tg-find { width: auto; margin: 0 8px 8px; }
+.tg-invite { gap: 20px; }
+.tg-invite p { font-size: 18px; }
+.tg-row { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
 
-.friends { display: flex; flex-direction: column; gap: 24px; padding-bottom: 24px; }
-.friends > p { padding: 0 32px; font-size: 16px; line-height: 1.4; color: var(--text); }
-.friends > p:first-of-type { padding-top: 24px; color: var(--sub); }
-.friend-ph { display: flex; align-items: center; gap: 12px; padding: 0 32px; }
-.fp-av { position: relative; width: 48px; height: 48px; border-radius: 50%; background: var(--s2); display: grid; place-items: center; color: var(--text); flex: none; }
-.fp-av i { position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-.fp-lines { display: flex; flex-direction: column; gap: 6px; }
-.fp-lines i { display: block; height: 8px; border-radius: 4px; background: var(--s2); width: 140px; }
-.fp-lines i:nth-child(2) { width: 110px; } .fp-lines i:nth-child(3) { width: 80px; }
 
 /* ===== Player bar ===== */
 .playerbar { display: grid; grid-template-columns: minmax(180px, 3fr) minmax(0, 4fr) minmax(180px, 3fr); align-items: center; padding: 0 16px 0 8px; height: 72px; }
