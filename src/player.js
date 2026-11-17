@@ -165,7 +165,7 @@ applyVolume(S.getState())
 S.subscribe(applyVolume)
 
 // ---- OS media controls: Windows SMTC / media keys (via Chromium) and Android notification (via plugin)
-function setSession(t) {
+export function setSession(t) {
   const art = S.getState().localArt[t.id] || t.art
   MediaSession.setMetadata({
     title: t.title, artist: t.artist, album: t.album,

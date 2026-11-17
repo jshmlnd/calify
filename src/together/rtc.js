@@ -21,6 +21,7 @@ const offering = new Set() // host: offers queued but not yet made
 let send = () => {}, role = null, ice, q = Promise.resolve(), gen = 0, out
 export const init = (sendFn, myRole) => { send = sendFn; role = myRole }
 export const hasPeer = id => peers.has(id) || offering.has(id)
+export const stateOf = id => peers.get(id)?.connectionState || 'closed'
 const servers = () => (ice ||= getIceServers())   // minted once per session
 
 function peer(id, iceServers) {

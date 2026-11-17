@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { newCode, normalizeCode } from '../src/together/codes.js'
-import { can, admit, canQueue, cleanChat, hostGone, listenerBlocked, hostOnly, BLOCKED_MSG, MAX_CHAT, queueFull, MAX_QUEUED } from '../src/together/rules.js'
+import { can, admit, canQueue, cleanChat, hostGone, needsRejoin, listenerBlocked, hostOnly, BLOCKED_MSG, MAX_CHAT, queueFull, MAX_QUEUED } from '../src/together/rules.js'
 import { membersFrom, forMe, joinDecision, joinError, chatMsg, addChat, libraryMeta, chunks, libraryPart, hostPos, stereo, artOf, nextMeta, MAX_ART } from '../src/together/state.js'
 
 test('newCode pads to 4 digits', () => {
@@ -31,6 +31,11 @@ test('admit, canQueue, hostGone', () => {
   assert.equal(canQueue(new Set(['l:1']), 'l:2'), false)
   assert.equal(hostGone(0, 14999), false)
   assert.equal(hostGone(0, 15000), true)
+})
+
+test('needsRejoin: only a broken or missing audio connection', () => {
+  for (const st of ['failed', 'disconnected', 'closed']) assert.equal(needsRejoin(st), true)
+  for (const st of ['new', 'connecting', 'connected']) assert.equal(needsRejoin(st), false)
 })
 
 test('cleanChat', () => {

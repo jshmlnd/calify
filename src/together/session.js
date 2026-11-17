@@ -7,10 +7,11 @@
 // role, rate-limits, and stamps `from` with the sender's user id (so `from` can be trusted here).
 import { supabase } from '../supabase'
 import { useStore } from '../store'
-import { audio, addToQueue, usePos } from '../player'
+import { MediaSession } from '@capgo/capacitor-media-session'
+import { audio, addToQueue, usePos, setSession } from '../player'
 import { resizeImage } from '../image'
 import { newCode, normalizeCode } from './codes'
-import { JOIN_TIMEOUT_MS, hostGone, canQueue, cleanChat, queueFull } from './rules'
+import { JOIN_TIMEOUT_MS, hostGone, canQueue, cleanChat, queueFull, needsRejoin } from './rules'
 import { membersFrom, forMe, joinDecision, joinError, chatMsg, addChat, libraryMeta, chunks, libraryPart, hostPos, nextMeta, artOf } from './state'
 import * as rtc from './rtc'
 
@@ -127,7 +128,11 @@ const on = {
     // Keep the object while nothing changed, so the UI doesn't churn every 5 s.
     const track = !p.track?.id ? null : same && prev.art === pic ? prev : { ...fromHost(libraryMeta([p.track]))[0], art: pic }
     const hostNow = { track, next: nextMeta(p.next), playing: !!p.playing, t: Number(p.t) || 0, at: Date.now() }
+    const was = T().hostNow
     setT({ hostNow })
+    // Android: the media notification (and its foreground service, which keeps the remote audio going with the screen off).
+    if (track && track !== prev) setSession(track)
+    if (hostNow.playing !== was?.playing) MediaSession.setPlaybackState({ playbackState: hostNow.playing ? 'playing' : 'paused' }).catch(() => {})
     // Mirror into the player state so the player bar, Now Playing and lyrics show the host's song
     // (store.js persists the listener's own track instead).
     useStore.setState({ current: track, playing: hostNow.playing })
@@ -157,6 +162,7 @@ const lobbyOn = {
     if (d === 'full') return send('join-ans', { to: p.from, ok: false, reason: 'full' })
     if (d === 'member') {   // invited (pre-approved, whatever the payload says), or a rejoin: fresh audio once they're in presence
       rtc.closePeer(p.from)
+      onPresence()   // a rejoin while still in presence gets no presence sync: offer now
       send('join-ans', { to: p.from, ok: true })
       if (invited.delete(p.from)) event(`${await profileName(p.from)} joined`)
       return
@@ -191,6 +197,8 @@ async function teardown() {
   memberIds.clear(); invited.clear(); libSending.clear()
   if (t?.role === 'listener') {
     useStore.setState({ current: t.saved, playing: false })
+    MediaSession.setPlaybackState({ playbackState: 'paused' }).catch(() => {})
+    if (t.saved) setSession(t.saved)
     usePos.setState({ t: audio.currentTime || 0, d: Number.isFinite(audio.duration) ? audio.duration : t.saved?.duration || 0 })
   }
   useStore.setState({ together: null })
@@ -354,6 +362,15 @@ export async function leaveSession() {
 useStore.subscribe((s, p) => s.user?.id !== p.user?.id && T() && leaveSession())
 useStore.subscribe((s, p) => s.upNext !== p.upNext && sendNow())   // listeners see the host's Up Next
 addEventListener('pagehide', () => T() && send('end'))
+
+// Listener back in the foreground (Android drops connections in the background): ask the host for fresh audio.
+// The host lets current members straight back in (joinDecision 'member') and re-offers.
+document.addEventListener('visibilitychange', () => {
+  const t = T()
+  if (document.visibilityState !== 'visible' || t?.role !== 'listener' || waiting) return
+  hostSeenAt = Date.now()   // presence may still be resyncing: don't call the host gone yet
+  if (needsRejoin(rtc.stateOf(t.hostId))) send('join-req', { name: me.name, avatar_path: me.avatar_path, rejoin: true })
+})
 
 // ---- invites: user:<my id>, only while signed in and the app is visible (battery: no idle socket in the background).
 let inv, invFor

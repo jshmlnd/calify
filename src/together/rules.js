@@ -11,6 +11,8 @@ export const canQueue = (hostLibraryIds, trackId) => hostLibraryIds.has(trackId)
 export const queueFull = (upNext, userId) => upNext.filter(t => t.addedById === userId).length >= MAX_QUEUED
 export const cleanChat = (text) => String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX_CHAT) || null
 export const hostGone = (lastSeenAt, now) => now - lastSeenAt >= HOST_GONE_MS
+// Listener back in the foreground: its audio connection is gone or broken ('closed' = no connection at all).
+export const needsRejoin = rtcState => ['failed', 'disconnected', 'closed'].includes(rtcState)
 export const listenerBlocked = (together) => together?.role === 'listener'
 
 export const BLOCKED_MSG = 'Only the host controls playback'
