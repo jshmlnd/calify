@@ -13,6 +13,7 @@ import { Library } from './parts/Library'
 import { PlayerBar } from './parts/PlayerBar'
 import { RightPanel } from './parts/RightPanel'
 import { InvitePrompt, join } from './parts/Together'
+import { normalizeCode } from './together/codes'
 import { FullScreen, MiniWindow, MobileMini, MobileNav, MobileNowPlaying } from './parts/Overlays'
 import { Home, Section } from './views/Home'
 import { Search } from './views/Search'
@@ -88,7 +89,8 @@ export default function App() {
     loadLocal().then(({ tracks, art }) => useStore.setState({ local: tracks, localArt: art })).catch(() => {}).then(welcome)
     window.calify?.zoom(useStore.getState().zoom)
     initAuth()
-    const offJoin = window.calify?.onJoin?.(join)   // calify://join/CODE handed over by the Electron main process
+    const joinFromLink = code => { const c = normalizeCode(code); if (!c || confirm(`Join the Listen together session ${c}?`)) join(code) }   // links never join without asking
+    const offJoin = window.calify?.onJoin?.(joinFromLink)   // calify://join/CODE handed over by the Electron main process
     const offUpdate = window.calify?.updates?.onReady(version => useStore.setState({ update: { version } }))
     const updTimer = window.calify?.updates && setTimeout(() => checkUpdates(true), 10000)
     addEventListener('keydown', onKey)
@@ -103,7 +105,7 @@ export default function App() {
         else if (s.navI > 0) s.back()
         else CapApp.minimizeApp()
       })
-      const joinUrl = url => url?.startsWith('calify://join/') && join(url.slice(14).split(/[/?#]/)[0])
+      const joinUrl = url => url?.startsWith('calify://join/') && joinFromLink(url.slice(14).split(/[/?#]/)[0])
       CapApp.addListener('appUrlOpen', ({ url }) => {
         if (url.startsWith('calify://auth')) finishSignIn(url).catch(e => useStore.getState().toastMsg(e.message))
         else joinUrl(url)
