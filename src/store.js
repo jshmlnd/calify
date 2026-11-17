@@ -7,6 +7,7 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 const dedupe = (item, list, max) => [item, ...list.filter(x => !(x.kind === item.kind && x.id === item.id))].slice(0, max)
 
 let toastTimer
+const HOST_ONLY = "This song is on the host's device, so it can't be saved here"
 export const useStore = create(persist((set, get) => ({
   // ---- library
   name: 'You',
@@ -59,11 +60,13 @@ export const useStore = create(persist((set, get) => ({
   },
 
   toggleLike: t => {
+    if (t.fromHost) return get().toastMsg(HOST_ONLY)
     const has = get().liked.some(x => x.id === t.id)
     set(s => ({ liked: has ? s.liked.filter(x => x.id !== t.id) : [{ ...t, addedAt: Date.now() }, ...s.liked] }))
     get().toastMsg(has ? 'Removed from Liked Songs' : 'Added to Liked Songs')
   },
   createPlaylist: (tracks = [], meta = {}) => {
+    if (tracks.some(t => t.fromHost)) return get().toastMsg(HOST_ONLY)
     const id = uid()
     const n = get().playlists.length + 1
     set(s => ({ playlists: [{ id, name: meta.name || `My Playlist #${n}`, description: meta.description || '', tracks: tracks.map(t => ({ ...t, addedAt: Date.now() })), createdAt: Date.now() }, ...s.playlists] }))
@@ -79,6 +82,7 @@ export const useStore = create(persist((set, get) => ({
     get().toastMsg('Removed from Your Library')
   },
   addToPlaylist: (id, tracks) => {
+    if (tracks.some(t => t.fromHost)) return get().toastMsg(HOST_ONLY)
     const p = get().playlists.find(x => x.id === id)
     const fresh = tracks.filter(t => !p.tracks.some(x => x.id === t.id))
     get().updatePlaylist(id, { tracks: [...p.tracks, ...fresh.map(t => ({ ...t, addedAt: Date.now() }))] })
@@ -97,7 +101,8 @@ export const useStore = create(persist((set, get) => ({
   version: 3,
   // 1.0 Spotify users: also delete the leftover login token
   migrate: (s, v) => { if (v < 2) s = dropAudius(s); if (v < 3) { s = dropSpotify(s); try { localStorage.removeItem('calify.spotify') } catch {} } return s },
-  partialize: s => Object.fromEntries(Object.entries(s).filter(([k, v]) => typeof v !== 'function' && ![
+  // A Listen together listener's `current` mirrors the host's song (metadata only): persist their own track instead.
+  partialize: s => Object.fromEntries(Object.entries({ ...s, current: s.together?.role === 'listener' ? s.together.saved : s.current }).filter(([k, v]) => typeof v !== 'function' && ![
     'local', 'localArt', 'playing', 'panel', 'nav', 'navI', 'toast', 'menu', 'dialog', 'mini', 'fullscreen', 'npOpen', 'together',
   ].includes(k))),
 }))

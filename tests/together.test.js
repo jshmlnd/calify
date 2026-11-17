@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { newCode, normalizeCode } from '../src/together/codes.js'
-import { can, admit, canQueue, cleanChat, hostGone, listenerBlocked, hostOnly, BLOCKED_MSG, MAX_CHAT } from '../src/together/rules.js'
+import { can, admit, canQueue, cleanChat, hostGone, listenerBlocked, hostOnly, BLOCKED_MSG, MAX_CHAT, queueFull, MAX_QUEUED } from '../src/together/rules.js'
 import { membersFrom, forMe, joinDecision, joinError, chatMsg, addChat, libraryMeta, chunks, libraryPart, hostPos, stereo } from '../src/together/state.js'
 
 test('newCode pads to 4 digits', () => {
@@ -118,4 +118,18 @@ test('stereo adds Opus stereo + bitrate once', () => {
   assert.match(out, /a=fmtp:111 minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1;maxaveragebitrate=128000\r\n/)
   assert.equal(stereo(out), out)
   assert.equal(stereo('v=0\r\n'), 'v=0\r\n')
+})
+
+test('libraryMeta coerces untrusted payloads', () => {
+  const [m] = libraryMeta([{ id: 5, title: { x: 1 }, artist: null, album: 'a'.repeat(400), duration: '12', extra: 'drop' }])
+  assert.deepEqual(m, { id: '5', title: '[object Object]', artist: '', album: 'a'.repeat(300), duration: 12 })
+  assert.equal(libraryMeta([{ duration: -3 }])[0].duration, 0)
+  assert.equal(libraryMeta([null])[0].id, '')
+})
+
+test('queueFull caps songs per listener', () => {
+  const q = Array.from({ length: MAX_QUEUED }, () => ({ addedById: 'b' }))
+  assert.equal(queueFull(q, 'b'), true)
+  assert.equal(queueFull(q.slice(1), 'b'), false)
+  assert.equal(queueFull(q, 'c'), false)
 })

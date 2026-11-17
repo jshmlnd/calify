@@ -24,7 +24,9 @@ export function chatMsg(p, hostId) {
 }
 export const addChat = (chat, msg) => [...chat, msg].slice(-200)
 
-export const libraryMeta = tracks => tracks.map(t => ({ id: t.id, title: t.title, artist: t.artist, album: t.album, duration: t.duration }))
+// Also used on payloads from the host, so every field is coerced and capped.
+const str = v => String(v ?? '').slice(0, 300)
+export const libraryMeta = tracks => tracks.map(t => ({ id: str(t?.id), title: str(t?.title), artist: str(t?.artist), album: str(t?.album), duration: Math.max(0, Number(t?.duration) || 0) }))
 export const chunks = (list, n) => list.length ? Array.from({ length: Math.ceil(list.length / n) }, (_, i) => list.slice(i * n, i * n + n)) : [[]]
 // Reassembles `library` parts (in order on one channel); part 0 starts over.
 export function libraryPart(buf, { part, parts, tracks }) {

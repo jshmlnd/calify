@@ -99,6 +99,7 @@ export const setVolume = v => S.setState({ volume: Math.min(1, Math.max(0, v)), 
 
 // addedBy: a Listen together listener's name, shown on the Up Next row (their request shows in chat instead of a toast).
 export function addToQueue(tracks, addedBy) {
+  if (!addedBy && tracks.some(t => t.fromHost)) return S.getState().toastMsg("This song is on the host's device. Use Add to queue in the session.")
   S.setState(s => ({ upNext: [...s.upNext, ...(addedBy ? tracks.map(t => ({ ...t, addedBy })) : tracks)] }))
   if (!addedBy) S.getState().toastMsg('Added to queue')
 }

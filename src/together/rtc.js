@@ -1,5 +1,5 @@
 // Listen together audio: the host sends its captured <audio> to each listener over its own RTCPeerConnection (mesh).
-// Signaling goes through session.js (setSend / signal); messages are { to, from, sdp | candidate }.
+// Signaling goes through session.js (init / signal); messages are { to, from, sdp | candidate }, `from` stamped by the server.
 import { supabase } from '../supabase'
 import { useStore } from '../store'
 import { audio, capture } from '../player'
@@ -17,8 +17,10 @@ export async function getIceServers() {
 }
 
 const peers = new Map()   // peer user id → RTCPeerConnection
-let send = () => {}, ice, q = Promise.resolve(), gen = 0, hosting = false, out
-export const setSend = fn => { send = fn }
+const offering = new Set() // host: offers queued but not yet made
+let send = () => {}, role = null, ice, q = Promise.resolve(), gen = 0, out
+export const init = (sendFn, myRole) => { send = sendFn; role = myRole }
+export const hasPeer = id => peers.has(id) || offering.has(id)
 const servers = () => (ice ||= getIceServers())   // minted once per session
 
 function peer(id, iceServers) {
@@ -37,15 +39,14 @@ const serial = fn => (q = q.then(fn).catch(() => {}))
 const hostTrack = () => capture().getAudioTracks().at(-1) || null
 
 // Host: a send-only audio connection to one listener (re-offering replaces the old one).
-export const offerTo = id => serial(async () => {
+export const offerTo = id => { offering.add(id); return serial(async () => {
   const g = gen, iceServers = await servers()
-  if (g !== gen) return
-  hosting = true
+  if (g !== gen || role !== 'host') return
   const pc = peer(id, iceServers)
   pc.addTransceiver(hostTrack() || 'audio', { direction: 'sendonly' })
   await pc.setLocalDescription()
   send({ to: id, sdp: pc.localDescription.toJSON() })
-})
+}).finally(() => offering.delete(id)) }
 
 // Listener: answers the host's offer and plays what arrives in its own element (its local `audio` stays paused).
 export async function answer({ from, sdp }) {
@@ -58,8 +59,10 @@ export async function answer({ from, sdp }) {
   send({ to: from, sdp: pc.localDescription.toJSON() })
 }
 
+// The host only takes answers, a listener only offers.
 export const signal = msg => serial(async () => {
-  if (msg.sdp?.type === 'offer') return answer(msg)
+  if (msg.sdp?.type === 'offer') return role === 'listener' && answer(msg)
+  if (msg.sdp?.type === 'answer' && role !== 'host') return
   const pc = peers.get(msg.from)
   if (!pc) return
   if (msg.sdp?.type === 'answer') await pc.setRemoteDescription({ type: 'answer', sdp: stereo(msg.sdp.sdp) })
@@ -77,14 +80,15 @@ function play(track) {
 
 // A new song means a new captured track: swap it into every connection without renegotiating.
 audio.addEventListener('playing', () => {
-  if (!hosting || !peers.size) return
+  if (role !== 'host' || !peers.size) return
   const t = hostTrack()
   for (const pc of peers.values()) for (const s of pc.getSenders()) if (s.track !== t) s.replaceTrack(t).catch(() => {})
 })
 
 export function close() {
   gen++
-  hosting = false
+  role = null
+  offering.clear()
   for (const id of [...peers.keys()]) closePeer(id)
   if (out) { out.pause(); out.srcObject = null }
   ice = null
