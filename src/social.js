@@ -92,7 +92,8 @@ async function saveLastPlayed(track, uid) {
   let art = plan === 'reuse' ? last.art_path : null
   // Local art is a blob URL; fetch turns it (or any URL) back into a blob to shrink and upload.
   if (plan === 'upload' && src) art = await fetch(src).then(r => r.blob()).then(b => resizeImage(b, 300)).then(b => uploadImage('cover', b)).catch(() => null)
-  if (my !== turn) return plan === 'upload' && removeImage(art) // a slow upload was overtaken by the next save
+  // A slow upload was overtaken by the next save, or the account changed meanwhile (saveProfile would write to the new one).
+  if (my !== turn || me() !== uid) return plan === 'upload' && removeImage(art)
   const old = useStore.getState().profile?.last_played?.art_path
   await saveProfile({ last_played: lastPlayedOf(track, art) })
   last = { uid, id: track.id, artist: track.artist, album: track.album, art_path: art }
