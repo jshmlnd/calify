@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useStore, useRoute } from '../store'
 import { Icon } from '../icons'
 import { Art, TrackArt, routeOf } from '../ui'
-import { appMenu, cmd, pickLocalFiles } from '../commands'
+import { appMenu, cmd, pickLocalFiles, canUpdate, checkUpdates } from '../commands'
 import { playContext } from '../player'
 import { supabase, signInWithGoogle, signOut } from '../supabase'
 import { useImageUrl } from '../social'
@@ -54,6 +54,7 @@ export const avatarMenu = () => [
   '-',
   { label: "What's New", onClick: () => useStore.getState().go({ name: 'whatsnew' }) },
   ...(supabase ? [{ label: 'Report a bug', onClick: cmd.bug }] : []),
+  ...(canUpdate() ? [{ label: 'Check for updates', onClick: () => checkUpdates() }] : []),
   { label: 'About Calify', onClick: cmd.about },
   ...(window.calify ? [{ label: 'Exit', onClick: cmd.exit }] : []),
 ].filter(Boolean)

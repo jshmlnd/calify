@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron')
 const path = require('path')
 const http = require('http')
+const { autoUpdater } = require('electron-updater')
 
 let win, normalBounds
 if (!app.requestSingleInstanceLock()) app.quit()
@@ -68,6 +69,20 @@ ipcMain.handle('auth', (_, url) => new Promise((resolve, reject) => {
   srv.on('error', e => { clearTimeout(timer); reject(new Error(e.code === 'EADDRINUSE' ? 'Port 43821 is busy, so sign-in cannot finish. Close the app using it and try again.' : e.message)) })
   srv.listen(43821, '127.0.0.1', () => shell.openExternal(url))
 }))
+
+// Updates from GitHub Releases (build.publish): download in the background, install on restart or quit.
+autoUpdater.autoDownload = true
+autoUpdater.autoInstallOnAppQuit = true
+let readyVersion = null
+autoUpdater.on('error', e => console.error('update:', e.message))   // without a listener an 'error' event would throw
+autoUpdater.on('update-downloaded', i => { readyVersion = i.version; win?.webContents.send('update-ready', i.version) })
+ipcMain.handle('update-check', async () => {
+  if (readyVersion) return 'ready'
+  if (!app.isPackaged) return 'none'   // electron-updater skips unpackaged runs
+  try { return (await autoUpdater.checkForUpdates())?.isUpdateAvailable ? 'downloading' : 'none' } catch { return 'error' }
+})
+ipcMain.handle('update-ready', () => readyVersion)
+ipcMain.on('update-install', () => readyVersion && autoUpdater.quitAndInstall(true, true))   // silent install, then relaunch
 
 app.on('second-instance', (_, argv) => { if (win) { if (win.isMinimized()) win.restore(); win.focus() } sendJoin(joinCode(argv)) })
 app.whenReady().then(create)

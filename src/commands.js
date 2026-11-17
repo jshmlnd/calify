@@ -3,6 +3,8 @@ import { toggle, next, prev, seekBy, setShuffle, cycleRepeat, setVolume, pause }
 import { importFiles, removeLocal } from './local'
 import { dropTracks } from './prune'
 import { supabase } from './supabase'
+import { Capacitor } from '@capacitor/core'
+import { checkForUpdate, installUpdate } from './updates'
 
 const S = () => useStore.getState()
 
@@ -55,6 +57,32 @@ export const cmd = {
   zoomIn: () => zoom(0.1), zoomOut: () => zoom(-0.1), zoomReset: () => zoom(1),
   about: () => useStore.setState({ dialog: 'about' }),
   bug: () => useStore.setState({ dialog: 'bug' }),
+}
+
+// "Check for updates". quiet = the startup check: it says nothing unless there is an update to offer.
+export const canUpdate = () => !!window.calify?.updates || Capacitor.getPlatform() === 'android'
+export async function checkUpdates(quiet) {
+  const say = m => quiet || S().toastMsg(m)
+  const desk = window.calify?.updates
+  if (desk) {
+    const r = await desk.check()
+    if (r === 'none') say("You're up to date")
+    else if (r === 'downloading') say('Downloading update…')
+    else if (r === 'error') say("Couldn't check for updates. Try again later.")
+    return   // 'ready': the update bar (onReady) already says so
+  }
+  try {
+    const info = await checkForUpdate()
+    if (!info) return say("You're up to date")
+    if (quiet) useStore.setState({ update: info })   // the update bar offers it; never download unasked
+    else await installAndroid(info)
+  } catch { say("Couldn't check for updates. Try again later.") }
+}
+// Android: download the APK, then Android shows its install prompt.
+export function installAndroid(info) {
+  useStore.setState({ update: null })
+  S().toastMsg('Downloading update…')
+  return installUpdate(info).catch(() => S().toastMsg("Couldn't download the update. Try again later."))
 }
 
 const edit = c => () => {

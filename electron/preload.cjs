@@ -13,4 +13,15 @@ contextBridge.exposeInMainWorld('calify', {
     ipcRenderer.invoke('join-pending').then(code => code && cb(String(code)))
     return () => ipcRenderer.removeListener('join', fn)
   },
+  // check(): 'none' | 'downloading' | 'ready' | 'error'. onReady(cb) gets the downloaded version (also one already waiting).
+  updates: {
+    check: () => ipcRenderer.invoke('update-check'),
+    install: () => ipcRenderer.send('update-install'),
+    onReady: cb => {
+      const fn = (_, v) => cb(String(v))
+      ipcRenderer.on('update-ready', fn)
+      ipcRenderer.invoke('update-ready').then(v => v && cb(String(v)))
+      return () => ipcRenderer.removeListener('update-ready', fn)
+    },
+  },
 })

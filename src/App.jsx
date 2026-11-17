@@ -4,7 +4,7 @@ import { Capacitor } from '@capacitor/core'
 import { App as CapApp } from '@capacitor/app'
 import { useStore, useRoute } from './store'
 import { MenuHost, Toast, useMobile } from './ui'
-import { onKey } from './commands'
+import { onKey, checkUpdates, installAndroid } from './commands'
 import { loadLocal } from './local'
 import { APP_VERSION } from './changelog'
 import { initAuth, finishSignIn } from './supabase'
@@ -38,6 +38,20 @@ function View() {
   }
 }
 
+// Desktop: "Calify X is ready — Restart to update". Android (startup check): "Calify X is available — Update".
+function UpdateBar() {
+  const u = useStore(s => s.update)
+  if (!u) return null
+  const desk = !u.apkUrl
+  return (
+    <div className="update-bar" role="status">
+      <span>Calify {u.version} is {desk ? 'ready' : 'available'}</span>
+      <button className="outline-btn sm" onClick={() => useStore.setState({ update: null })}>Later</button>
+      <button className="white-btn" onClick={() => desk ? window.calify.updates.install() : installAndroid(u)}>{desk ? 'Restart to update' : 'Update'}</button>
+    </div>
+  )
+}
+
 function Resizer() {
   const move = e => {
     if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
@@ -54,6 +68,15 @@ export default function App() {
   const profile = useStore(s => s.profile), user = useStore(s => s.user)
   // Persisted profile applies at boot (before any network); signed out is always Calico + ginger.
   useEffect(() => { applyTheme(user && profile ? profile : {}) }, [profile, user])
+  // Android checks on start only when signed in, at most once a day (desktop: 10 s after start, below).
+  useEffect(() => {
+    if (!user || Capacitor.getPlatform() !== 'android') return
+    try {
+      if (Date.now() - (+localStorage.getItem('calify-update-check') || 0) < 864e5) return
+      localStorage.setItem('calify-update-check', Date.now())
+    } catch {}
+    checkUpdates(true)
+  }, [user])
 
   useEffect(() => {
     // Show What's New once per version; a fresh install (nothing stored, empty library) just records it.
@@ -68,6 +91,8 @@ export default function App() {
     window.calify?.zoom(useStore.getState().zoom)
     initAuth()
     const offJoin = window.calify?.onJoin?.(join)   // calify://join/CODE handed over by the Electron main process
+    const offUpdate = window.calify?.updates?.onReady(version => useStore.setState({ update: { version } }))
+    const updTimer = window.calify?.updates && setTimeout(() => checkUpdates(true), 10000)
     addEventListener('keydown', onKey)
     const vis = () => document.documentElement.classList.toggle('is-hidden', document.visibilityState === 'hidden')
     document.addEventListener('visibilitychange', vis)
@@ -87,7 +112,7 @@ export default function App() {
       })
       CapApp.getLaunchUrl().then(r => joinUrl(r?.url), () => {})   // appUrlOpen only covers links that arrive while Calify runs
     }
-    return () => { removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', vis); offJoin?.() }
+    return () => { removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', vis); offJoin?.(); offUpdate?.(); clearTimeout(updTimer) }
   }, [])
 
   if (mini) return <MiniWindow />
@@ -99,7 +124,7 @@ export default function App() {
       <MobileNav />
       <MobileNowPlaying />
       {panel && <div className="m-panel"><RightPanel /></div>}
-      <MenuHost /><Toast /><DialogHost /><InvitePrompt />
+      <MenuHost /><Toast /><DialogHost /><InvitePrompt /><UpdateBar />
     </div>
   )
 
@@ -114,7 +139,7 @@ export default function App() {
       </div>
       <PlayerBar />
       {fullscreen && <FullScreen />}
-      <MenuHost /><Toast /><DialogHost /><InvitePrompt />
+      <MenuHost /><Toast /><DialogHost /><InvitePrompt /><UpdateBar />
     </div>
   )
 }

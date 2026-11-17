@@ -8,7 +8,7 @@ import { useLyrics, LyricsLines } from '../parts/Lyrics'
 import { LibraryList, createMenu } from '../parts/Library'
 import { Avatar, signInCmd, signOutCmd } from '../parts/TopBar'
 import { supabase } from '../supabase'
-import { pickLocalFiles, cmd } from '../commands'
+import { pickLocalFiles, cmd, canUpdate, checkUpdates } from '../commands'
 import { removeLocal } from '../local'
 import { del } from 'idb-keyval'
 import { CaliCat } from '../parts/CaliCat'
@@ -121,6 +121,7 @@ export function Settings() {
       <section>
         <h2>About</h2>
         <p className="sub">Calify {APP_VERSION}. Plays your music files. Synced lyrics by LRCLIB.</p>
+        {canUpdate() && <button className="outline-btn sm" onClick={() => checkUpdates()}>Check for updates</button>}
       </section>
       <div className="view-foot" />
     </div>

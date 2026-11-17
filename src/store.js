@@ -37,6 +37,7 @@ export const useStore = create(persist((set, get) => ({
   toast: null, menu: null, dialog: null,
   together: null,         // Listen together session (src/together/session.js); never persisted
   invite: null,           // { code, from, name }: a Listen together invite waiting for Join / Not now
+  update: null,           // { version, apkUrl? }: an update ready to install (desktop) or to download (Android)
 
   go: route => set(s => {
     if (same(s.nav[s.navI], route)) return { npOpen: false }
@@ -104,7 +105,7 @@ export const useStore = create(persist((set, get) => ({
   migrate: (s, v) => { if (v < 2) s = dropAudius(s); if (v < 3) { s = dropSpotify(s); try { localStorage.removeItem('calify.spotify') } catch {} } return s },
   // A Listen together listener's `current` mirrors the host's song (metadata only): persist their own track instead.
   partialize: s => Object.fromEntries(Object.entries({ ...s, current: s.together?.role === 'listener' ? s.together.saved : s.current }).filter(([k, v]) => typeof v !== 'function' && ![
-    'local', 'localArt', 'playing', 'panel', 'nav', 'navI', 'toast', 'menu', 'dialog', 'mini', 'fullscreen', 'npOpen', 'together', 'invite',
+    'local', 'localArt', 'playing', 'panel', 'nav', 'navI', 'toast', 'menu', 'dialog', 'mini', 'fullscreen', 'npOpen', 'together', 'invite', 'update',
   ].includes(k))),
 }))
 
