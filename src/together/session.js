@@ -31,6 +31,8 @@ const send = (event, payload = {}) => supabase.rpc('together_send', { p_code: co
   .then(({ error }) => error, e => e)
 const later = (fn, ms) => { const id = setTimeout(fn, ms); timers.push(id); return id }
 const every = (fn, ms) => timers.push(setInterval(fn, ms))
+const profileName = id => supabase.from('profiles').select('name').eq('id', id).maybeSingle()
+  .then(({ data }) => String(data?.name ?? '').slice(0, 40) || 'Someone', () => 'Someone')
 const nameOf = id => T()?.members.find(m => m.id === id)?.name || 'Someone'
 
 function self() {
@@ -149,18 +151,19 @@ const on = {
 
 // ---- lobby (host side)
 const lobbyOn = {
-  'join-req': p => {
+  'join-req': async p => {
     if (T()?.role !== 'host') return
     const d = joinDecision([{ id: me.id }, ...[...memberIds].map(id => ({ id }))], p.from)
-    const name = String(p.name ?? '').slice(0, 40) || 'Someone'
     if (d === 'full') return send('join-ans', { to: p.from, ok: false, reason: 'full' })
     if (d === 'member') {   // invited (pre-approved, whatever the payload says), or a rejoin: fresh audio once they're in presence
       rtc.closePeer(p.from)
       send('join-ans', { to: p.from, ok: true })
-      if (invited.delete(p.from)) event(`${name} joined`)
+      if (invited.delete(p.from)) event(`${await profileName(p.from)} joined`)
       return
     }
-    const req = { id: String(p.from), name }
+    // The name the host approves comes from profiles by the server-stamped `from`, never from the payload.
+    const req = { id: String(p.from), name: await profileName(p.from) }
+    if (T()?.role !== 'host') return
     setT(t => ({ pending: [...t.pending.filter(x => x.id !== req.id), req] }))
     later(() => setT(t => ({ pending: t.pending.filter(x => x !== req) })), JOIN_TIMEOUT_MS)
   },
@@ -369,8 +372,7 @@ async function syncInvites() {
 async function onInvite(p) {
   const c = normalizeCode(p?.code)
   if (!c || T() || typeof p.from !== 'string') return
-  const { data } = await supabase.from('profiles').select('name').eq('id', p.from).maybeSingle().then(r => r, () => ({}))
-  const invite = { code: c, from: p.from, name: String(data?.name ?? '').slice(0, 40) || 'Someone' }
+  const invite = { code: c, from: p.from, name: await profileName(p.from) }
   useStore.setState({ invite })
   setTimeout(() => S().invite === invite && useStore.setState({ invite: null }), JOIN_TIMEOUT_MS)   // the host's invite lapses then too
 }
