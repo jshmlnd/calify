@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { useStore, useArt } from './store'
 import { Icon } from './icons'
 import { playContext, playItem, addToQueue, toggle } from './player'
+import { removeLocalTrack } from './commands'
 
 export const fmt = s => {
   if (!Number.isFinite(s) || s < 0) s = 0
@@ -154,6 +155,7 @@ export function trackMenu(t, { playlistId } = {}) {
     { label: 'Add to queue', icon: 'queue', onClick: () => addToQueue([t]) },
     '-',
     { label: 'Show lyrics', icon: 'mic', onClick: () => { if (useStore.getState().current?.id !== t.id) playContext([t], 0); s.go({ name: 'lyrics' }) } },
+    t.source === 'local' && { label: 'Remove from Calify', icon: 'trash', onClick: () => removeLocalTrack(t.id) },
   ].filter(Boolean)
 }
 

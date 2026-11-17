@@ -24,3 +24,14 @@ test('rebuilds the queue around survivors and clears a gone current', () => {
   const gone = dropTracks({ ctxTracks: [k, g], order: [0, 1], pos: 1, current: g }, isGone, new Set())
   assert.deepEqual([gone.ctxTracks, gone.order, gone.pos, gone.current], [[k], [0], -1, null])
 })
+
+test('removing the playing track leaves current null and the queue without it', () => {
+  const out = dropTracks({ ctxTracks: [k, g, k2], order: [0, 1, 2], pos: 1, current: g }, isGone, new Set())
+  assert.equal(out.current, null); assert.deepEqual(out.ctxTracks, [k, k2])
+})
+
+test('removing a non-current track keeps the queue pointer on the same track', () => {
+  const s = { ctxTracks: [g, k, k2], order: [2, 0, 1], pos: 2, current: k }
+  const out = dropTracks(s, isGone, new Set())
+  assert.equal(out.ctxTracks[out.order[out.pos]], s.ctxTracks[s.order[s.pos]])
+})

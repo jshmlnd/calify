@@ -1,6 +1,7 @@
 import { useStore, isDesktopApp } from './store'
-import { toggle, next, prev, seekBy, setShuffle, cycleRepeat, setVolume } from './player'
-import { importFiles } from './local'
+import { toggle, next, prev, seekBy, setShuffle, cycleRepeat, setVolume, pause } from './player'
+import { importFiles, removeLocal } from './local'
+import { dropTracks } from './prune'
 
 const S = () => useStore.getState()
 
@@ -17,6 +18,20 @@ export function pickLocalFiles() {
     } catch (e) { S().toastMsg('Import failed: ' + e.message) }
   }
   input.click()
+}
+
+export async function removeLocalTrack(id) {
+  const t = S().local.find(x => x.id === id)
+  if (!t || !confirm(`Remove "${t.title}" from Calify? The original file on your device is not touched.`)) return
+  if (S().current?.id === id) pause()
+  const rest = await removeLocal(id)
+  const art = S().localArt[id]
+  if (art) URL.revokeObjectURL(art)
+  useStore.setState(s => {
+    const { [id]: _, ...localArt } = s.localArt
+    return { ...dropTracks(s, x => x.id === id, new Set()), local: rest, localArt }
+  })
+  S().toastMsg('Removed from Calify')
 }
 
 const zoom = f => {

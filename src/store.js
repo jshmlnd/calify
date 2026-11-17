@@ -87,7 +87,8 @@ export const useStore = create(persist((set, get) => ({
 }), {
   name: 'calify',
   version: 3,
-  migrate: (s, v) => { if (v < 2) s = dropAudius(s); if (v < 3) s = dropSpotify(s); return s },
+  // 1.0 Spotify users: also delete the leftover login token
+  migrate: (s, v) => { if (v < 2) s = dropAudius(s); if (v < 3) { s = dropSpotify(s); try { localStorage.removeItem('calify.spotify') } catch {} } return s },
   partialize: s => Object.fromEntries(Object.entries(s).filter(([k, v]) => typeof v !== 'function' && ![
     'local', 'localArt', 'playing', 'panel', 'nav', 'navI', 'toast', 'menu', 'dialog', 'mini', 'fullscreen', 'npOpen',
   ].includes(k))),
