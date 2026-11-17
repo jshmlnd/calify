@@ -34,6 +34,7 @@ export const useStore = create(persist((set, get) => ({
   libCollapsed: false, libWidth: 340, libSort: 'recents', libFilter: null,
   privateSession: false, mini: false, fullscreen: false, npOpen: false, zoom: 1,
   toast: null, menu: null, dialog: null,
+  together: null,         // Listen together session (src/together/session.js); never persisted
 
   go: route => set(s => {
     if (same(s.nav[s.navI], route)) return { npOpen: false }
@@ -97,7 +98,7 @@ export const useStore = create(persist((set, get) => ({
   // 1.0 Spotify users: also delete the leftover login token
   migrate: (s, v) => { if (v < 2) s = dropAudius(s); if (v < 3) { s = dropSpotify(s); try { localStorage.removeItem('calify.spotify') } catch {} } return s },
   partialize: s => Object.fromEntries(Object.entries(s).filter(([k, v]) => typeof v !== 'function' && ![
-    'local', 'localArt', 'playing', 'panel', 'nav', 'navI', 'toast', 'menu', 'dialog', 'mini', 'fullscreen', 'npOpen',
+    'local', 'localArt', 'playing', 'panel', 'nav', 'navI', 'toast', 'menu', 'dialog', 'mini', 'fullscreen', 'npOpen', 'together',
   ].includes(k))),
 }))
 

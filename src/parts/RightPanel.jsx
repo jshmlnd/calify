@@ -69,7 +69,7 @@ function QRow({ t, current, onClick }) {
   return (
     <div className={`q-row ${current ? 'current' : ''}`} onClick={onClick} onContextMenu={e => useStore.getState().openMenu(e, trackMenu(t))}>
       <div className="q-art"><TrackArt track={t} />{current && playing && <span className="q-eq"><Eq /></span>}</div>
-      <div className="q-text"><b>{t.title}</b><small>{t.artist}</small></div>
+      <div className="q-text"><b>{t.title}</b><small>{t.artist}{t.addedBy && ` · Added by ${t.addedBy}`}</small></div>
     </div>
   )
 }

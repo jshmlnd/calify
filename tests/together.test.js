@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { newCode, normalizeCode } from '../src/together/codes.js'
-import { can, admit, canQueue, cleanChat, hostGone, listenerBlocked, MAX_CHAT } from '../src/together/rules.js'
+import { can, admit, canQueue, cleanChat, hostGone, listenerBlocked, hostOnly, BLOCKED_MSG, MAX_CHAT } from '../src/together/rules.js'
+import { membersFrom, forMe, joinDecision, joinError, chatMsg, addChat, libraryMeta, chunks, libraryPart, hostPos, stereo } from '../src/together/state.js'
 
 test('newCode pads to 4 digits', () => {
   assert.equal(newCode(() => 0), 'CALI-0000')
@@ -42,4 +43,79 @@ test('listenerBlocked', () => {
   assert.equal(listenerBlocked(null), false)
   assert.equal(listenerBlocked({ role: 'host' }), false)
   assert.equal(listenerBlocked({ role: 'listener' }), true)
+})
+
+test('normalizeCode: malformed escapes give null, not a throw', () => {
+  assert.equal(normalizeCode('https://calify.zjkm.tech/calify/join?c=%E0%A4%A'), null)
+  assert.equal(normalizeCode('?c=CALI%2D0482'), 'CALI-0482')
+})
+
+test('hostOnly: a listener calling toggle() does not change playing', () => {
+  const toasts = [], st = { together: { role: 'listener' }, playing: false, toastMsg: m => toasts.push(m) }
+  const toggle = hostOnly(() => st, () => { st.playing = !st.playing })
+  toggle()
+  assert.equal(st.playing, false)
+  assert.deepEqual(toasts, [BLOCKED_MSG])
+  st.together = { role: 'host' }; toggle()
+  assert.equal(st.playing, true)
+  st.together = null; toggle()
+  assert.equal(st.playing, false)
+})
+
+test('membersFrom: host first, one row per user', () => {
+  const p = { b: [{ id: 'b', name: 'Mia', avatar_path: null, role: 'listener' }, { id: 'b', name: 'Mia', role: 'listener' }], a: [{ id: 'a', name: 'Jo', avatar_path: 'a/x.jpg', role: 'host' }] }
+  assert.deepEqual(membersFrom(p, 'a'), [{ id: 'a', name: 'Jo', avatar_path: 'a/x.jpg' }, { id: 'b', name: 'Mia', avatar_path: null }])
+})
+
+test('forMe and joinDecision', () => {
+  assert.equal(forMe({ to: 'a', from: 'b' }, 'a'), true)
+  assert.equal(forMe({ to: 'c', from: 'b' }, 'a'), false)
+  assert.equal(forMe(null, 'a'), false)
+  const m = n => Array.from({ length: n }, (_, i) => ({ id: 'm' + i }))
+  assert.equal(joinDecision(m(2), 'm1'), 'member')
+  assert.equal(joinDecision(m(4), 'x'), 'ask')
+  assert.equal(joinDecision(m(5), 'x'), 'full')
+  assert.equal(joinError({ ok: true }), null)
+  assert.equal(joinError({ ok: false, reason: 'full' }), 'Session is full')
+  assert.equal(joinError({ ok: false }), "The host didn't let you in")
+  assert.equal(joinError(null), "The host didn't let you in")
+})
+
+test('chatMsg cleans input; only the host can send events; addChat caps', () => {
+  assert.equal(chatMsg({ from: 'b', text: '   ' }, 'a'), null)
+  const m = chatMsg({ id: 'x', from: 'b', name: 'Mia', text: ' hi  there ', at: 5, kind: 'event' }, 'a')
+  assert.deepEqual(m, { id: 'x', from: 'b', name: 'Mia', text: 'hi there', at: 5, kind: 'msg' })
+  assert.equal(chatMsg({ id: 'y', from: 'a', name: 'Jo', text: 'Mia joined', at: 1, kind: 'event' }, 'a').kind, 'event')
+  assert.equal(chatMsg({ from: 'b', name: 'x'.repeat(99), text: 'hi' }, 'a').name.length, 40)
+  let c = []
+  for (let i = 0; i < 205; i++) c = addChat(c, { id: i })
+  assert.equal(c.length, 200)
+  assert.equal(c[0].id, 5)
+})
+
+test('library: metadata only, chunked by 200, reassembled', () => {
+  const tracks = Array.from({ length: 450 }, (_, i) => ({ id: 'l:' + i, title: 't' + i, artist: 'a', album: 'b', duration: 3, source: 'local', lrc: 'x' }))
+  const parts = chunks(libraryMeta(tracks), 200)
+  assert.deepEqual(parts.map(p => p.length), [200, 200, 50])
+  assert.deepEqual(Object.keys(parts[0][0]), ['id', 'title', 'artist', 'album', 'duration'])
+  let st = { buf: [], lib: null }
+  parts.forEach((p, part) => { st = libraryPart(st.buf, { part, parts: parts.length, tracks: p }) })
+  assert.equal(st.lib.length, 450)
+  assert.deepEqual(chunks([], 200), [[]])
+  assert.deepEqual(libraryPart([], { part: 0, parts: 1, tracks: [] }).lib, [])
+})
+
+test('hostPos extrapolates while playing, clamps to duration', () => {
+  assert.equal(hostPos(null, 0), 0)
+  assert.equal(hostPos({ t: 10, playing: true, at: 1000, track: { duration: 200 } }, 3000), 12)
+  assert.equal(hostPos({ t: 10, playing: false, at: 1000, track: { duration: 200 } }, 3000), 10)
+  assert.equal(hostPos({ t: 199, playing: true, at: 0, track: { duration: 200 } }, 5000), 200)
+})
+
+test('stereo adds Opus stereo + bitrate once', () => {
+  const sdp = 'v=0\r\na=rtpmap:111 opus/48000/2\r\na=fmtp:111 minptime=10;useinbandfec=1\r\na=rtpmap:0 PCMU/8000\r\n'
+  const out = stereo(sdp)
+  assert.match(out, /a=fmtp:111 minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1;maxaveragebitrate=128000\r\n/)
+  assert.equal(stereo(out), out)
+  assert.equal(stereo('v=0\r\n'), 'v=0\r\n')
 })
