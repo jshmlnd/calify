@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useStore, isDesktopApp } from '../store'
+import { submitBugReport } from '../social'
 import { useColor } from '../color'
 import { Icon } from '../icons'
 import { Spinner, useMobile } from '../ui'
@@ -133,6 +135,24 @@ const KEYS = [
   ['Filter library', 'Ctrl + F'], ['New playlist', 'Ctrl + N'], ['Preferences', 'Ctrl + P'], ['Zoom', 'Ctrl + = / − / 0'],
 ]
 
+function BugDialog({ close }) {
+  const [what, setWhat] = useState(''), [expected, setExpected] = useState(''), [busy, setBusy] = useState(false), [err, setErr] = useState('')
+  const send = async e => {
+    e.preventDefault()
+    setBusy(true); setErr('')
+    try { await submitBugReport({ what, expected }); useStore.getState().toastMsg('Thanks! Your report was sent.'); close() }
+    catch (x) { setErr(x.message.startsWith('Please wait') ? x.message : 'Couldn’t send. Check your connection and try again.'); setBusy(false) }
+  }
+  return (
+    <form onSubmit={send} className="bug-form" style={{ display: 'contents' }}>
+      <label className="field"><span>What happened?</span><textarea autoFocus required minLength={10} maxLength={2000} value={what} onChange={e => setWhat(e.target.value)} /></label>
+      <label className="field"><span>What did you expect? (optional)</span><textarea maxLength={2000} value={expected} onChange={e => setExpected(e.target.value)} /></label>
+      {err && <p className="sub" role="alert">{err}</p>}
+      <button className="white-btn right" disabled={busy || what.trim().length < 10}>{busy ? 'Sending…' : 'Send'}</button>
+    </form>
+  )
+}
+
 export function DialogHost() {
   const dialog = useStore(s => s.dialog)
   if (!dialog) return null
@@ -140,8 +160,8 @@ export function DialogHost() {
   return (
     <div className="dialog-scrim" onPointerDown={e => e.target === e.currentTarget && close()}>
       <div className="dialog" role="dialog" aria-modal="true">
-        <header><h2>{dialog === 'keys' ? 'Keyboard shortcuts' : 'About Calify'}</h2><button className="icon-btn" aria-label="Close" onClick={close}><Icon name="close" /></button></header>
-        {dialog === 'keys' ? (
+        <header><h2>{dialog === 'keys' ? 'Keyboard shortcuts' : dialog === 'bug' ? 'Report a bug' : 'About Calify'}</h2><button className="icon-btn" aria-label="Close" onClick={close}><Icon name="close" /></button></header>
+        {dialog === 'bug' ? <BugDialog close={close} /> : dialog === 'keys' ? (
           <dl className="keys">{KEYS.map(([a, b]) => <div key={a}><dt>{a}</dt><dd><kbd>{b}</kbd></dd></div>)}</dl>
         ) : (
           <div className="about">

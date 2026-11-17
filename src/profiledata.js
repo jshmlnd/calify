@@ -46,3 +46,14 @@ export const publicTracks = tracks => (tracks || []).slice(0, MAX_PUBLIC_TRACKS)
 
 // A playlist's `public` flag is the uid that published it; publish only for that signed-in user and never while offline.
 export const canPublish = ({ uid, flag, online = true }) => !!uid && flag === uid && online !== false
+
+// Bug report rules mirror the bug_reports table checks (what 10–2000, expected ≤ 2000).
+export const REPORT_GAP = 60e3
+export function cleanReport({ what, expected }) {
+  what = String(what ?? '').trim(); expected = String(expected ?? '').trim()
+  if (what.length < 10 || what.length > 2000) throw new Error('Describe what happened in 10–2000 characters')
+  if (expected.length > 2000) throw new Error('What you expected must be 2000 characters or fewer')
+  return { what, expected: expected || null }
+}
+// Seconds left before this device may send another report (0 = go ahead).
+export const reportWait = (last, now) => Math.max(0, Math.ceil((last + REPORT_GAP - now) / 1000))

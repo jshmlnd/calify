@@ -3,7 +3,9 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 import { useStore } from './store'
 import { resizeImage } from './image'
-import { cleanPatch, publicTracks, canPublish, lastPlayedOf, lastPlayedPlan, likeOf, fresh, splitPath, SIGN_SECONDS } from './profiledata.js'
+import { Capacitor } from '@capacitor/core'
+import { APP_VERSION } from './changelog'
+import { cleanReport, reportWait, cleanPatch, publicTracks, canPublish, lastPlayedOf, lastPlayedPlan, likeOf, fresh, splitPath, SIGN_SECONDS } from './profiledata.js'
 
 const me = () => useStore.getState().user?.id
 const must = ({ data, error }) => { if (error) throw error; return data }
@@ -177,4 +179,16 @@ if (supabase) {
     }
     for (const pp of prev.playlists) if (pp.public && pp.public === uid && !s.playlists.some(x => x.id === pp.id)) unpublishPlaylist(pp.id).catch(e => toast(e.message))
   })
+}
+
+// Anyone may insert (no select policy, so no .select() here). Client guard: one report a minute per device.
+export async function submitBugReport(r) {
+  const body = cleanReport(r)
+  let last = 0
+  try { last = +localStorage.getItem('calify.lastReport') || 0 } catch {}
+  const wait = reportWait(last, Date.now())
+  if (wait) throw new Error(`Please wait ${wait} s before sending another report`)
+  const platform = window.calify ? 'windows' : Capacitor.isNativePlatform() ? 'android' : 'web'
+  must(await supabase.from('bug_reports').insert({ ...body, app_version: APP_VERSION, platform, user_id: me() ?? null }))
+  try { localStorage.setItem('calify.lastReport', String(Date.now())) } catch {}
 }

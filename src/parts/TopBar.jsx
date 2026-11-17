@@ -53,6 +53,7 @@ export const avatarMenu = () => [
   { label: 'Private session', icon: 'user', checked: useStore.getState().privateSession, onClick: cmd.privateSession },
   '-',
   { label: "What's New", onClick: () => useStore.getState().go({ name: 'whatsnew' }) },
+  ...(supabase ? [{ label: 'Report a bug', onClick: cmd.bug }] : []),
   { label: 'About Calify', onClick: cmd.about },
   ...(window.calify ? [{ label: 'Exit', onClick: cmd.exit }] : []),
 ].filter(Boolean)

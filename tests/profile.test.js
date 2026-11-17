@@ -80,3 +80,12 @@ test('canPublish needs the signed-in uid to match the flag, and a connection', (
   assert.equal(canPublish({ uid: 'a', flag: false }), false)
   assert.equal(canPublish({ uid: 'a', flag: 'a', online: false }), false)
 })
+
+test('cleanReport enforces 10–2000 / ≤ 2000 and reportWait gates 60 s', async () => {
+  const { cleanReport, reportWait } = await import('../src/profiledata.js')
+  assert.deepEqual(cleanReport({ what: ' it crashes now ', expected: ' ' }), { what: 'it crashes now', expected: null })
+  assert.throws(() => cleanReport({ what: 'short' }), /10/)
+  assert.throws(() => cleanReport({ what: 'x'.repeat(10), expected: 'y'.repeat(2001) }), /2000/)
+  assert.equal(reportWait(0, 1e6), 0)
+  assert.equal(reportWait(1e6, 1e6 + 59e3), 1)
+})

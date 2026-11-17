@@ -2,6 +2,7 @@ import { useStore, isDesktopApp } from './store'
 import { toggle, next, prev, seekBy, setShuffle, cycleRepeat, setVolume, pause } from './player'
 import { importFiles, removeLocal } from './local'
 import { dropTracks } from './prune'
+import { supabase } from './supabase'
 
 const S = () => useStore.getState()
 
@@ -53,6 +54,7 @@ export const cmd = {
   volume: d => setVolume(S().volume + d),
   zoomIn: () => zoom(0.1), zoomOut: () => zoom(-0.1), zoomReset: () => zoom(1),
   about: () => useStore.setState({ dialog: 'about' }),
+  bug: () => useStore.setState({ dialog: 'bug' }),
 }
 
 const edit = c => () => {
@@ -105,6 +107,7 @@ export const appMenu = () => [
   ] },
   { label: 'Help', sub: [
     { label: 'Keyboard Shortcuts', onClick: () => useStore.setState({ dialog: 'keys' }) },
+    ...(supabase ? [{ label: 'Report a bug', onClick: cmd.bug }] : []),
     '-',
     { label: 'About Calify', onClick: cmd.about },
   ] },
