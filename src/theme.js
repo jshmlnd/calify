@@ -38,13 +38,17 @@ export function readableAccent(hex, theme) {
 // Black or white text, whichever reads better on the accent.
 export const onAccent = hex => contrast(hex, '#000000') >= contrast(hex, '#ffffff') ? '#000000' : '#ffffff'
 
-export function applyTheme({ theme, accent } = {}) {
+// Accent tokens for a theme; applyTheme sets them on :root, the profile page scopes a visitor's onto itself.
+export function accentVars(accent, theme) {
   const t = THEMES.includes(theme) ? theme : 'calico'
   const a = /^#[0-9a-f]{6}$/i.test(accent || '') ? accent : ACCENTS[0]
   const base = readableAccent(a, t), [h, s, l] = toHsl(base)
+  return { '--accent': base, '--on-accent': onAccent(base), '--accent-2': fromHsl(h, s, Math.min(1, Math.max(0, l + (t === 'daylight' ? -.06 : .06)))) }
+}
+
+export function applyTheme({ theme, accent } = {}) {
+  const t = THEMES.includes(theme) ? theme : 'calico'
   const root = document.documentElement
   root.dataset.theme = t
-  root.style.setProperty('--accent', base)
-  root.style.setProperty('--on-accent', onAccent(base))
-  root.style.setProperty('--accent-2', fromHsl(h, s, Math.min(1, Math.max(0, l + (t === 'daylight' ? -.06 : .06)))))
+  for (const [k, v] of Object.entries(accentVars(accent, t))) root.style.setProperty(k, v)
 }

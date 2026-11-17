@@ -16,6 +16,7 @@ import { FullScreen, MiniWindow, MobileMini, MobileNav, MobileNowPlaying } from 
 import { Home, Section } from './views/Home'
 import { Search } from './views/Search'
 import { Collection } from './views/Collection'
+import { Profile } from './views/Profile'
 import { DialogHost, LibraryPage, LyricsView, Settings, WhatsNew } from './views/Misc'
 
 function View() {
@@ -27,6 +28,7 @@ function View() {
     case 'whatsnew': return <WhatsNew />
     case 'settings': return <Settings />
     case 'library': return <LibraryPage />
+    case 'profile': return <Profile key={r.id} id={r.id} />
     case 'section': return <Section k={r.key} />
     default: return <Home />
   }

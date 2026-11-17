@@ -1,0 +1,132 @@
+import { useEffect, useState } from 'react'
+import { useStore } from '../store'
+import { Spinner, useAsync } from '../ui'
+import { Icon } from '../icons'
+import { Avatar } from '../parts/TopBar'
+import { THEMES, ACCENTS, accentVars, readableAccent } from '../theme'
+import { getProfile, getCounts, saveProfile, uploadImage, removeImage, useImageUrl } from '../social'
+import { resizeImage } from '../image'
+
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`
+
+export function Profile({ id }) {
+  const user = useStore(s => s.user), mine = useStore(s => s.user?.id === id && s.profile)
+  const viewerTheme = useStore(s => s.user && s.profile?.theme) // what App.jsx applies
+  const res = useAsync(() => user ? getProfile(id) : Promise.reject(new Error('Sign in to see profiles')), [id, user?.id])
+  const counts = useAsync(() => user ? getCounts(id) : Promise.resolve(null), [id, user?.id])
+  const [edit, setEdit] = useState(false)
+  const p = mine || res.data
+  const bg = useImageUrl(p?.background_path)
+  if (!p && res.loading) return <div className="view"><Spinner /></div>
+  if (!p) return <div className="view empty"><h2>Couldn't open that profile</h2><p>{res.error?.message || "You may be offline."}</p></div>
+  const own = user?.id === id, c = counts.data
+  // Owner's accent, made readable for this viewer's theme, scoped to this page only.
+  const vars = { ...accentVars(p.accent, viewerTheme), '--c': 'color-mix(in srgb, var(--accent) 50%, #000)' }
+  return (
+    <div className="view scroll-y coll prof" style={vars}>
+      <header className={`coll-head prof-head ${bg ? 'has-bg' : ''}`} style={bg ? { '--bg-img': `url("${bg}")` } : undefined}>
+        <div className="coll-art prof-photo"><Avatar p={p} size={232} /></div>
+        <div className="coll-info">
+          <span className="coll-type">Profile</span>
+          <h1 className={p.name?.length > 22 ? 'long' : ''}>{p.name}</h1>
+          {p.bio && <p className="coll-desc">{p.bio}</p>}
+          {c && <p className="coll-meta">{plural(c.playlists, 'public playlist')} · {plural(c.followers, 'follower')} · {c.following} following</p>}
+        </div>
+      </header>
+      <div className="coll-body">
+        <div className="action-bar">
+          {own ? <button className="outline-btn" onClick={() => setEdit(true)}><Icon name="edit" size={16} /> Edit</button>
+            : null /* Task 8: Follow / Following button goes here */}
+        </div>
+        {p.last_played?.title && <LastPlayed lp={p.last_played} />}
+        <PublicPlaylists id={id} />
+        <div className="view-foot" />
+      </div>
+      {edit && <EditProfile p={p} onClose={() => setEdit(false)} />}
+    </div>
+  )
+}
+
+// Shown, not playable.
+function LastPlayed({ lp }) {
+  const art = useImageUrl(lp.art_path)
+  return (
+    <section className="shelf prof-sec">
+      <header className="shelf-head"><h2>Last played</h2></header>
+      <div className="lp-row">
+        {art ? <img className="art" src={art} alt="" /> : <div className="art art-empty"><Icon name="note" size="40%" /></div>}
+        <div className="q-text"><b>{lp.title}</b><small>{lp.artist}</small></div>
+      </div>
+    </section>
+  )
+}
+
+// Task 9: "Public playlists" cards (Shelf of the owner's public_playlists).
+function PublicPlaylists() { return null }
+
+// Picks an image, shows it resized, uploads only on Save.
+function useImagePick(max) {
+  const [pick, setPick] = useState(null) // { blob, url }
+  useEffect(() => () => pick && URL.revokeObjectURL(pick.url), [pick])
+  const onChange = e => {
+    const f = e.target.files[0]
+    e.target.value = ''
+    if (f) resizeImage(f, max).then(blob => setPick({ blob, url: URL.createObjectURL(blob) }), err => useStore.getState().toastMsg(err.message))
+  }
+  return [pick, onChange]
+}
+
+function EditProfile({ p, onClose }) {
+  const [name, setName] = useState(p.name || '')
+  const [bio, setBio] = useState(p.bio || '')
+  const [theme, setTheme] = useState(p.theme || 'calico')
+  const [accent, setAccent] = useState(p.accent || ACCENTS[0])
+  const [photo, pickPhoto] = useImagePick(512)
+  const [back, pickBack] = useImagePick()
+  const [busy, setBusy] = useState(false)
+  const photoNow = useImageUrl(p.avatar_path), backNow = useImageUrl(p.background_path)
+  const save = async e => {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      const patch = { name, bio, theme, accent: readableAccent(accent, theme) }
+      if (photo) patch.avatar_path = await uploadImage('avatar', photo.blob)
+      if (back) patch.background_path = await uploadImage('background', back.blob)
+      await saveProfile(patch) // App.jsx re-applies the theme from the saved profile
+      if (photo) removeImage(p.avatar_path)
+      if (back) removeImage(p.background_path)
+      onClose()
+    } catch (err) { useStore.getState().toastMsg(err.message); setBusy(false) }
+  }
+  return (
+    <div className="dialog-scrim" onPointerDown={e => e.target === e.currentTarget && onClose()}>
+      <form className="dialog prof-edit" role="dialog" aria-modal="true" aria-label="Edit profile" onSubmit={save}>
+        <header><h2>Edit profile</h2><button type="button" className="icon-btn" aria-label="Close" onClick={onClose}><Icon name="close" /></button></header>
+        <div className="pe-images">
+          <label className="pe-photo" title="Choose photo">
+            {photo?.url || photoNow ? <img src={photo?.url || photoNow} alt="" /> : <Icon name="user" size={40} />}
+            <input type="file" accept="image/*" onChange={pickPhoto} aria-label="Choose photo" />
+          </label>
+          <label className="pe-back" title="Choose background" style={back || backNow ? { backgroundImage: `url("${back?.url || backNow}")` } : undefined}>
+            <span>{back || backNow ? 'Change background' : 'Add background'}</span>
+            <input type="file" accept="image/*" onChange={pickBack} aria-label="Choose background" />
+          </label>
+        </div>
+        <label className="field"><span>Name</span><input autoFocus required value={name} maxLength={40} onChange={e => setName(e.target.value)} /></label>
+        <label className="field"><span>Bio</span><textarea value={bio} maxLength={160} placeholder="Say something about you" onChange={e => setBio(e.target.value)} /></label>
+        <fieldset className="field pe-set"><legend>Theme</legend>
+          <div className="pe-themes">{THEMES.map(t => (
+            <label key={t}><input type="radio" name="theme" value={t} checked={theme === t} onChange={() => setTheme(t)} />{t[0].toUpperCase() + t.slice(1)}</label>
+          ))}</div>
+        </fieldset>
+        <fieldset className="field pe-set"><legend>Accent</legend>
+          <div className="swatches">
+            {ACCENTS.map(a => <button key={a} type="button" className={`swatch ${accent === a ? 'on' : ''}`} style={{ background: a }} aria-label={a} aria-pressed={accent === a} onClick={() => setAccent(a)} />)}
+            <input type="color" className="swatch custom" value={accent} aria-label="Custom accent" onChange={e => setAccent(e.target.value)} />
+          </div>
+        </fieldset>
+        <button className="white-btn right" disabled={busy || !name.trim()}>{busy ? 'Saving…' : 'Save'}</button>
+      </form>
+    </div>
+  )
+}

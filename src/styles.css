@@ -41,6 +41,7 @@
 /* Daylight: hero and overlay regions sit on art colour or black tint, so they keep the dark theme's light-on-dark tokens */
 :root[data-theme="daylight"] :is(.coll-head, .m-nav, .m-np, .miniwin, .fs, .mini-pill, .miniwin-exit) {
   --text: #fbf3e6; --sub: #c9b8a3; --dim: #8f7d6b; --ink: #120d0a; --cream: #f6ead8; --fg-rgb: 251 243 230; --panel: #1a1410; --bg: #0f0b08;
+  color: var(--text); /* the tokens alone don't reset text already inherited from the light page */
 }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
@@ -676,3 +677,34 @@ input, textarea { caret-color: var(--accent); }
 .welcome-card b { font-size: 16px; }
 .welcome-card small { color: var(--sub); font-size: 14px; line-height: 1.4; }
 .mobile .welcome-actions { grid-template-columns: 1fr; }
+
+/* ===== Profile (header tint comes from the owner's accent, scoped on .prof) ===== */
+.prof-head.has-bg { background: linear-gradient(rgba(0,0,0,.2), rgba(0,0,0,.65)), var(--bg-img) center / cover; }
+.prof-head.has-bg::before { display: none; }
+.prof-photo { container-type: inline-size; }
+.prof-photo .avatar { width: 100% !important; height: auto !important; aspect-ratio: 1; font-size: 40cqw !important; filter: drop-shadow(0 4px 30px rgba(0,0,0,.5)); }
+.prof .action-bar .outline-btn { display: inline-flex; align-items: center; gap: 8px; border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.prof-sec { padding: 0 24px; }
+.lp-row { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 6px; max-width: 480px; background: var(--hover); }
+.lp-row .art { width: 56px; height: 56px; border-radius: 4px; flex: none; object-fit: cover; }
+.prof-edit { max-height: calc(100vh - 32px); overflow-y: auto; }
+.pe-images { display: flex; gap: 16px; align-items: stretch; }
+.pe-images input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.pe-photo, .pe-back { position: relative; cursor: pointer; overflow: hidden; display: grid; place-items: center; background: var(--s4) center / cover; color: var(--sub); }
+.pe-photo { width: 120px; height: 120px; border-radius: 50%; flex: none; }
+.pe-photo img { width: 100%; height: 100%; object-fit: cover; }
+.pe-back { flex: 1; border-radius: 8px; font-weight: 700; }
+.pe-back span { background: rgba(0,0,0,.55); color: #fbf3e6; padding: 6px 12px; border-radius: 500px; }
+.pe-photo:focus-within, .pe-back:focus-within { outline: 2px solid var(--text); outline-offset: 2px; }
+.pe-set { border: 0; padding: 0; margin: 0; }
+.pe-set legend { padding: 0; margin-bottom: 6px; }
+.pe-themes { display: flex; gap: 16px; font-size: 14px; font-weight: 500; color: var(--text); }
+.pe-themes label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.pe-themes input { accent-color: var(--accent); }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.swatch { width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; outline-offset: 2px; }
+.swatch.on { outline: 2px solid var(--text); }
+.swatch.custom { padding: 0; background: none; cursor: pointer; overflow: hidden; }
+.swatch.custom::-webkit-color-swatch-wrapper { padding: 0; }
+.swatch.custom::-webkit-color-swatch { border: 0; border-radius: 50%; }
+.mobile .prof-sec { padding: 0 16px; }

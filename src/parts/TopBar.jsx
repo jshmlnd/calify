@@ -5,11 +5,18 @@ import { Art, TrackArt, routeOf } from '../ui'
 import { appMenu, cmd, pickLocalFiles } from '../commands'
 import { playContext } from '../player'
 import { supabase, signInWithGoogle, signOut } from '../supabase'
+import { useImageUrl } from '../social'
 
-export function Avatar({ size = 32 }) {
-  const name = useStore(s => s.name)
-  const priv = useStore(s => s.privateSession)
-  const photo = useStore(s => s.user?.avatarUrl)
+// Own avatar by default; `p` (a profiles row) shows someone's profile photo instead.
+export function Avatar({ size = 32, p }) {
+  const own = useStore(s => s.user && s.profile)
+  const myName = useStore(s => s.name)
+  const priv = useStore(s => !p && s.privateSession)
+  const google = useStore(s => s.user?.avatarUrl)
+  const signed = useImageUrl((p || own)?.avatar_path)
+  // Google's photo only stands in for the signed-in user's own picture.
+  const photo = signed || (!p || p.id === own?.id ? google : null)
+  const name = p ? p.name : myName
   const [broken, setBroken] = useState(null)
   return (
     <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.4 }}>

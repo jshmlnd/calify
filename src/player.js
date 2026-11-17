@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { MediaSession } from '@capgo/capacitor-media-session'
 import { useStore as S } from './store'
 import { localFile } from './local'
+import { setLastPlayed } from './social'
 
 export const audio = new Audio()
 audio.preload = 'auto'
@@ -27,6 +28,7 @@ export async function load(track, autoplay = true) {
   audio.src = src
   if (autoplay) audio.play().catch(() => {})
   S.getState().pushHistory(track)
+  setLastPlayed(track).catch(() => {})
   setSession(track)
 }
 
