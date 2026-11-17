@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { applyTheme } from './theme'
 import { Capacitor } from '@capacitor/core'
 import { App as CapApp } from '@capacitor/app'
 import { useStore, useRoute } from './store'
@@ -44,6 +45,9 @@ function Resizer() {
 export default function App() {
   const { mini, fullscreen, libCollapsed, libWidth, panel, navI } = useStore()
   const mobile = useMobile()
+  const profile = useStore(s => s.profile), user = useStore(s => s.user)
+  // Persisted profile applies at boot (before any network); signed out is always Calico + ginger.
+  useEffect(() => { applyTheme(user && profile ? profile : {}) }, [profile, user])
 
   useEffect(() => {
     // Show What's New once per version; a fresh install (nothing stored, empty library) just records it.
