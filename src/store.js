@@ -19,6 +19,10 @@ export const useStore = create(persist((set, get) => ({
   history: [],          // recently played tracks
   local: [], localArt: {}, // loaded from IndexedDB at boot (not persisted)
 
+  // ---- account (src/supabase.js; persisted so theme/profile show before the network)
+  user: null,           // { id, email, name, avatarUrl }
+  profile: null,        // profiles row
+
   // ---- player
   current: null, playing: false,
   ctx: null, ctxTracks: [], order: [], pos: -1, upNext: [],

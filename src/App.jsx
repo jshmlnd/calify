@@ -6,6 +6,7 @@ import { MenuHost, Toast, useMobile } from './ui'
 import { onKey } from './commands'
 import { loadLocal } from './local'
 import { APP_VERSION } from './changelog'
+import { initAuth, finishSignIn } from './supabase'
 import { TopBar } from './parts/TopBar'
 import { Library } from './parts/Library'
 import { PlayerBar } from './parts/PlayerBar'
@@ -55,6 +56,7 @@ export default function App() {
     }
     loadLocal().then(({ tracks, art }) => useStore.setState({ local: tracks, localArt: art })).catch(() => {}).then(welcome)
     window.calify?.zoom(useStore.getState().zoom)
+    initAuth()
     addEventListener('keydown', onKey)
     const vis = () => document.documentElement.classList.toggle('is-hidden', document.visibilityState === 'hidden')
     document.addEventListener('visibilitychange', vis)
@@ -66,6 +68,9 @@ export default function App() {
         else if (s.npOpen) useStore.setState({ npOpen: false })
         else if (s.navI > 0) s.back()
         else CapApp.minimizeApp()
+      })
+      CapApp.addListener('appUrlOpen', ({ url }) => {
+        if (url.startsWith('calify://auth')) finishSignIn(url).catch(e => useStore.getState().toastMsg(e.message))
       })
     }
     return () => { removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', vis) }

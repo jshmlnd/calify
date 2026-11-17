@@ -4,25 +4,43 @@ import { Icon } from '../icons'
 import { Art, TrackArt, routeOf } from '../ui'
 import { appMenu, cmd, pickLocalFiles } from '../commands'
 import { playContext } from '../player'
+import { supabase, signInWithGoogle, signOut } from '../supabase'
 
 export function Avatar({ size = 32 }) {
   const name = useStore(s => s.name)
   const priv = useStore(s => s.privateSession)
+  const photo = useStore(s => s.user?.avatarUrl)
+  const [broken, setBroken] = useState(null)
   return (
     <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.4 }}>
+      {photo && broken !== photo ? <img src={photo} alt="" referrerPolicy="no-referrer" onError={() => setBroken(photo)} /> : <>
       {/* cat head drawn inside its own box so the ears never overflow and get cut */}
       <svg viewBox="0 0 40 40" aria-hidden="true">
         <path d="M6.5 18 L7.5 2.5 L18 10 Z" fill="var(--accent)" />
         <path d="M33.5 18 L32.5 2.5 L22 10 Z" fill="var(--ink)" stroke="var(--accent)" strokeWidth="1.6" strokeLinejoin="round" />
         <circle cx="20" cy="23" r="15.5" fill="var(--accent)" />
       </svg>
-      <b>{(name || 'Y')[0].toUpperCase()}</b>
+      <b>{(name || 'Y')[0].toUpperCase()}</b></>}
       {priv && <i className="avatar-dot" title="Private session" />}
     </span>
   )
 }
 
+const toastErr = e => useStore.getState().toastMsg(e.message)
+export const signInCmd = () => signInWithGoogle().catch(toastErr)
+export const signOutCmd = () => signOut().catch(toastErr)
+// Signed out: "Sign in with Google"; signed in: "Profile", "Sign out". Nothing when this build has no Supabase env.
+export const accountItems = () => {
+  const user = useStore.getState().user
+  if (!supabase) return []
+  return user ? [
+    { label: 'Profile', icon: 'user', onClick: () => useStore.getState().go({ name: 'profile', id: user.id }) },
+    { label: 'Sign out', icon: 'power', onClick: signOutCmd },
+  ] : [{ label: 'Sign in with Google', icon: 'user', onClick: signInCmd }]
+}
+
 export const avatarMenu = () => [
+  ...(supabase ? [...accountItems(), '-'] : []),
   { label: 'Settings', icon: 'sliders', onClick: cmd.prefs },
   { label: 'Import local files', icon: 'file', onClick: pickLocalFiles },
   { label: 'Private session', icon: 'user', checked: useStore.getState().privateSession, onClick: cmd.privateSession },

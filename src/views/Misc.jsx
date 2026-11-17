@@ -4,7 +4,8 @@ import { Icon } from '../icons'
 import { Spinner, useMobile } from '../ui'
 import { useLyrics, LyricsLines } from '../parts/Lyrics'
 import { LibraryList, createMenu } from '../parts/Library'
-import { Avatar } from '../parts/TopBar'
+import { Avatar, signInCmd, signOutCmd } from '../parts/TopBar'
+import { supabase } from '../supabase'
 import { pickLocalFiles, cmd } from '../commands'
 import { removeLocal } from '../local'
 import { del } from 'idb-keyval'
@@ -65,7 +66,7 @@ export function WhatsNew() {
 }
 
 export function Settings() {
-  const { name, local, zoom, privateSession } = useStore()
+  const { name, local, zoom, privateSession, user, go } = useStore()
   const set = useStore.setState
   const clearLocal = async () => {
     if (!confirm(`Remove all ${local.length} local files from Calify? The original files on your device are not touched.`)) return
@@ -76,6 +77,21 @@ export function Settings() {
   return (
     <div className="view scroll-y pad-view settings">
       <h1 className="section-title">Settings</h1>
+      {supabase && (
+        <section>
+          <h2>Account</h2>
+          {user ? (
+            <div className="set-row"><span>{user.name}<small>Signed in with Google as {user.email}</small></span>
+              <span className="set-btns">
+                <button className="outline-btn sm" onClick={() => go({ name: 'profile', id: user.id })}>Profile</button>
+                <button className="outline-btn sm" onClick={signOutCmd}>Sign out</button>
+              </span></div>
+          ) : (
+            <div className="set-row"><span>Sign in<small>Optional. Your music files never leave this device.</small></span>
+              <button className="outline-btn sm" onClick={signInCmd}>Sign in with Google</button></div>
+          )}
+        </section>
+      )}
       <section>
         <h2>Profile</h2>
         <label className="set-row"><span>Display name<small>Shown as the owner of your playlists.</small></span>

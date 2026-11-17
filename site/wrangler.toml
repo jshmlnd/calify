@@ -1,0 +1,6 @@
+name = "calify-site"
+compatibility_date = "2026-11-01"
+routes = [{ pattern = "calify.zjkm.tech", custom_domain = true }]
+
+[assets]
+directory = "./public"
