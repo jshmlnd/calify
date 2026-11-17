@@ -1,8 +1,6 @@
 import { useStore, isDesktopApp } from './store'
 import { toggle, next, prev, seekBy, setShuffle, cycleRepeat, setVolume } from './player'
 import { importFiles } from './local'
-import * as sp from './spotify'
-import { readPlaylistCsv, bestMatch, norm } from './csv'
 
 const S = () => useStore.getState()
 
@@ -19,34 +17,6 @@ export function pickLocalFiles() {
     } catch (e) { S().toastMsg('Import failed: ' + e.message) }
   }
   input.click()
-}
-
-// Spotify playlist export (CSV) → Calify playlist, matching each song in your music files, then on Spotify (when logged in).
-export function pickPlaylistCsv() {
-  const input = Object.assign(document.createElement('input'), { type: 'file', multiple: true, accept: '.csv,text/csv' })
-  input.onchange = async () => { for (const f of input.files) await importPlaylistCsv(f) }
-  input.click()
-}
-
-async function importPlaylistCsv(file) {
-  const rows = readPlaylistCsv(await file.text())
-  if (!rows?.length) return S().toastMsg(`${file.name} doesn't look like a playlist export`)
-  const name = file.name.replace(/\.csv$/i, '').replace(/_+/g, ' ').trim() || 'Imported playlist'
-  const found = new Array(rows.length).fill(null)
-  let done = 0
-  const find = async r => bestMatch(r, S().local) ||
-    (sp.connected() ? bestMatch(r, await sp.search(`${norm(r.title)} ${norm(r.artist.split(/[,;]/)[0])}`).catch(() => [])) : null)
-  // 4 lookups at a time: quick without tripping Spotify's rate limit.
-  await Promise.all([0, 1, 2, 3].map(async w => {
-    for (let i = w; i < rows.length; i += 4) {
-      found[i] = await find(rows[i])
-      S().toastMsg(`Matching "${name}": ${++done} of ${rows.length}`)
-    }
-  }))
-  const tracks = [...new Map(found.filter(Boolean).map(t => [t.id, t])).values()]
-  const hits = found.filter(Boolean).length
-  S().createPlaylist(tracks, { name, description: `Imported from Spotify: found ${hits} of ${rows.length} songs in your files${sp.connected() ? ' and on Spotify' : ''}.` })
-  S().toastMsg(hits === rows.length ? `Imported "${name}"` : `Imported "${name}": ${rows.length - hits} of ${rows.length} songs weren't available`)
 }
 
 const zoom = f => {
@@ -76,7 +46,6 @@ export const appMenu = () => [
   { label: 'File', sub: [
     { label: 'New Playlist', shortcut: 'Ctrl+N', onClick: cmd.newPlaylist },
     { label: 'Import Local Files…', onClick: pickLocalFiles },
-    { label: 'Import Spotify Playlist (CSV)…', onClick: pickPlaylistCsv },
     '-',
     { label: 'Private Session', checked: S().privateSession, onClick: cmd.privateSession },
     ...(isDesktopApp ? ['-', { label: 'Exit', shortcut: 'Ctrl+Shift+Q', onClick: cmd.exit }] : []),

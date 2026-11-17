@@ -5,7 +5,6 @@ import { useStore, useRoute } from './store'
 import { MenuHost, Toast, useMobile } from './ui'
 import { onKey } from './commands'
 import { loadLocal } from './local'
-import * as sp from './spotify'
 import { TopBar } from './parts/TopBar'
 import { Library } from './parts/Library'
 import { PlayerBar } from './parts/PlayerBar'
@@ -46,7 +45,6 @@ export default function App() {
   useEffect(() => {
     loadLocal().then(({ tracks, art }) => useStore.setState({ local: tracks, localArt: art })).catch(() => {})
     window.calify?.zoom(useStore.getState().zoom)
-    sp.handleRedirect().then(() => sp.connected() && sp.refreshLibrary()).catch(e => useStore.getState().toastMsg(e.message))
     addEventListener('keydown', onKey)
     if (Capacitor.isNativePlatform()) {
       CapApp.addListener('backButton', () => {

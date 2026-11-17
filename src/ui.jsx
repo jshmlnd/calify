@@ -42,7 +42,7 @@ export function Art({ item, track, size, round, className = '' }) {
   const kind = item?.kind
   const style = size ? { width: size, height: size } : undefined
   const cls = `art ${round ? 'round ' : ''}${className}`
-  if (kind === 'liked' || kind === 'sliked') return <div className={cls + (kind === 'liked' ? ' art-liked' : ' art-sliked')} style={style}><Icon name="heart" size="45%" /></div>
+  if (kind === 'liked') return <div className={cls + ' art-liked'} style={style}><Icon name="heart" size="45%" /></div>
   if (kind === 'local') return <div className={cls + ' art-local'} style={style}><Icon name="file" size="45%" /></div>
   if (kind === 'history') return <div className={cls + ' art-history'} style={style}><Icon name="clock" size="45%" /></div>
   const src = track ? localArt : item?.art

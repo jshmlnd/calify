@@ -37,10 +37,10 @@ ipcMain.on('mini', (_, on) => {
 ipcMain.on('zoom', (_, f) => win.webContents.setZoomFactor(f))
 ipcMain.on('quit', () => app.quit())
 
-// Spotify sign-in: catch the redirect on a one-shot 127.0.0.1 server. The dashboard only accepts a fixed
-// port, so register http://127.0.0.1:43821/callback (same port as Android).
+// Sign-in: catch the redirect on a one-shot 127.0.0.1 server (fixed port 43821, same as Android).
 ipcMain.handle('auth', (_, url) => new Promise((resolve, reject) => {
-  if (typeof url !== 'string' || !url.startsWith('https://accounts.spotify.com/authorize?')) return reject(new Error('Bad sign-in URL'))
+  // Task 5 restricts this to the Supabase auth host.
+  if (typeof url !== 'string' || !url.startsWith('https://')) return reject(new Error('Bad sign-in URL'))
   let redirect
   const srv = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://127.0.0.1')
@@ -52,8 +52,8 @@ ipcMain.handle('auth', (_, url) => new Promise((resolve, reject) => {
     win.focus()
     resolve({ redirect, query: u.search })
   })
-  const timer = setTimeout(() => { srv.close(); reject(new Error('Spotify sign-in timed out')) }, 5 * 60 * 1000)
-  srv.on('error', e => { clearTimeout(timer); reject(new Error(e.code === 'EADDRINUSE' ? 'Port 43821 is busy, so Spotify sign-in cannot finish. Close the app using it and try again.' : e.message)) })
+  const timer = setTimeout(() => { srv.close(); reject(new Error('Sign-in timed out')) }, 5 * 60 * 1000)
+  srv.on('error', e => { clearTimeout(timer); reject(new Error(e.code === 'EADDRINUSE' ? 'Port 43821 is busy, so sign-in cannot finish. Close the app using it and try again.' : e.message)) })
   srv.listen(43821, '127.0.0.1', () => {
     redirect = `http://127.0.0.1:${srv.address().port}/callback`
     shell.openExternal(url.replace('__REDIRECT__', encodeURIComponent(redirect)))
@@ -61,7 +61,5 @@ ipcMain.handle('auth', (_, url) => new Promise((resolve, reject) => {
 }))
 
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus() } })
-// castLabs' Widevine build exposes `components`; stock Electron doesn't (Spotify playback then reports it can't decode).
-const { components } = require('electron')
-app.whenReady().then(() => components?.whenReady()).catch(e => console.error('Widevine unavailable:', e)).then(create)
+app.whenReady().then(create)
 app.on('window-all-closed', () => app.quit())

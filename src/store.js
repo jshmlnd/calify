@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { dropAudius } from './migrate'
+import { dropAudius, dropSpotify } from './migrate'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
@@ -17,7 +17,6 @@ export const useStore = create(persist((set, get) => ({
   recentSearches: [],   // collection items or { kind: 'track', track }
   history: [],          // recently played tracks
   local: [], localArt: {}, // loaded from IndexedDB at boot (not persisted)
-  spotifyClientId: '', spotifyUser: null, spotifyPlaylists: [], // tokens live in spotify.js, not here
 
   // ---- player
   current: null, playing: false,
@@ -87,10 +86,10 @@ export const useStore = create(persist((set, get) => ({
   pushHistory: t => !get().privateSession && set(s => ({ history: [t, ...s.history.filter(x => x.id !== t.id)].slice(0, 50) })),
 }), {
   name: 'calify',
-  version: 2,
-  migrate: (state, version) => (version < 2 ? dropAudius(state) : state),
+  version: 3,
+  migrate: (s, v) => { if (v < 2) s = dropAudius(s); if (v < 3) s = dropSpotify(s); return s },
   partialize: s => Object.fromEntries(Object.entries(s).filter(([k, v]) => typeof v !== 'function' && ![
-    'local', 'localArt', 'playing', 'panel', 'nav', 'navI', 'toast', 'menu', 'dialog', 'mini', 'fullscreen', 'npOpen', 'spotifyError',
+    'local', 'localArt', 'playing', 'panel', 'nav', 'navI', 'toast', 'menu', 'dialog', 'mini', 'fullscreen', 'npOpen',
   ].includes(k))),
 }))
 

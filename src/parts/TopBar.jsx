@@ -3,7 +3,6 @@ import { useStore, useRoute } from '../store'
 import { Icon } from '../icons'
 import { Art, TrackArt, routeOf } from '../ui'
 import { appMenu, cmd, pickLocalFiles } from '../commands'
-import * as sp from '../spotify'
 import { playContext } from '../player'
 
 export function Avatar({ size = 32 }) {
@@ -26,9 +25,6 @@ export function Avatar({ size = 32 }) {
 export const avatarMenu = () => [
   { label: 'Settings', icon: 'sliders', onClick: cmd.prefs },
   { label: 'Import local files', icon: 'file', onClick: pickLocalFiles },
-  !useStore.getState().spotifyUser && { label: 'Log in with Spotify', icon: 'user', onClick: () => (sp.BUILT_IN_ID
-    ? sp.login().then(() => useStore.setState({ spotifyError: null }), e => { useStore.setState({ spotifyError: e.message }); cmd.prefs() })
-    : cmd.prefs()) },
   { label: 'Private session', icon: 'user', checked: useStore.getState().privateSession, onClick: cmd.privateSession },
   '-',
   { label: 'About Calify', onClick: cmd.about },

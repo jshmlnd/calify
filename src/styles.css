@@ -638,13 +638,7 @@ input, textarea { caret-color: var(--accent); }
   .cat-head { transition: none; }
 }
 
-/* Spotify bits */
-.art-sliked { background: radial-gradient(circle at 30% 25%, #3a2a1f, var(--ink) 75%); color: var(--accent); }
-.art-sliked svg path { fill: var(--accent); stroke: none; }
-.inline-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
-.set-row input::placeholder { color: var(--dim); }
-.spotify-btn { background: var(--text); color: var(--ink); font-weight: 700; border-radius: 500px; padding: 8px 20px; white-space: nowrap; }
-.spotify-btn:hover:not(:disabled) { transform: scale(1.04); }
+
 .set-error { background: rgba(240, 138, 60, .12); border: 1px solid rgba(240, 138, 60, .45); color: var(--text); border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; line-height: 1.45; user-select: text; }
 
 /* Home, empty library */

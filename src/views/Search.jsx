@@ -4,7 +4,6 @@ import { Art, Spinner, TrackList, useAsync, useMobile } from '../ui'
 import { playContext } from '../player'
 import { Icon } from '../icons'
 import { CaliCat } from '../parts/CaliCat'
-import * as sp from '../spotify'
 
 function useDebounced(v, ms) {
   const [d, setD] = useState(v)
@@ -12,39 +11,22 @@ function useDebounced(v, ms) {
   return d
 }
 
-// Spotify genre searches ("genre:pop"), shown once Spotify is connected.
-const GENRES = [
-  ['Pop', 'pop', '#477d95'], ['Hip-Hop', 'hip-hop', '#ba5d07'], ['R&B', 'r-n-b', '#8c1932'], ['OPM', 'opm', '#e8115b'],
-  ['Rock', 'rock', '#e91429'], ['Indie', 'indie', '#608108'], ['Electronic', 'electronic', '#dc148c'], ['K-Pop', 'k-pop', '#148a08'],
-  ['Jazz', 'jazz', '#8d67ab'], ['Latin', 'latin', '#e1118c'], ['Acoustic', 'acoustic', '#a56752'], ['Classical', 'classical', '#7d4b32'],
-  ['Metal', 'metal', '#503750'], ['Country', 'country', '#d84000'], ['Soul', 'soul', '#283ea8'], ['Reggae', 'reggae', '#1e3264'],
-]
-
 export function Search({ q = '' }) {
   const query = useDebounced(q.trim(), 300)
   const [tab, setTab] = useState('all')
-  const { local, addRecentSearch, go, spotifyUser } = useStore()
+  const { local, addRecentSearch } = useStore()
   const mobile = useMobile()
   const res = useAsync(async () => {
     if (!query) return null
-    const spotify = sp.connected() ? await sp.search(query).catch(() => []) : []
     const ql = query.toLowerCase()
-    const mine = local.filter(t => `${t.title} ${t.artist} ${t.album}`.toLowerCase().includes(ql))
-    return { tracks: [...mine, ...spotify] }
+    return { tracks: local.filter(t => `${t.title} ${t.artist} ${t.album}`.toLowerCase().includes(ql)) }
   }, [query])
 
   if (!q.trim()) return (
     <div className="view scroll-y pad-view">
       {mobile && <MobileSearchInput q={q} />}
-      {spotifyUser ? <>
-        <h2 className="section-title sm">Browse all</h2>
-        <div className="genres">{GENRES.map(([label, g, c]) => (
-          <button key={g} className="genre" style={{ background: c }} onClick={() => go({ name: 'search', q: `genre:${g}` })}><span>{label}</span></button>
-        ))}</div>
-      </> : (
-        <div className="empty"><CaliCat size={96} state="asleep" /><h2>Search your music</h2>
-          <p>Type to search your music files. Log in with Spotify in Settings to search Spotify too.</p></div>
-      )}
+      <div className="empty"><CaliCat size={96} state="asleep" /><h2>Search your music files</h2>
+        <p>Type a song, artist or album from your Local Files.</p></div>
       <div className="view-foot" />
     </div>
   )
@@ -63,7 +45,7 @@ export function Search({ q = '' }) {
       {(res.loading || query !== q.trim()) && !r && <Spinner />}
       {r && !r.tracks.length && (
         <div className="empty"><CaliCat size={96} state="asleep" /><h2>No results found for "{query}"</h2>
-          <p>{spotifyUser ? 'Please make sure your words are spelled correctly, or use fewer or different keywords.' : 'Only your music files were searched. Log in with Spotify in Settings to search Spotify too.'}</p></div>
+          <p>Please make sure your words are spelled correctly, or use fewer or different keywords.</p></div>
       )}
       {r && tab === 'all' && (top || r.tracks.length > 0) && (
         <div className="top-row">

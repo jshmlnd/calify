@@ -2,18 +2,16 @@ import { useState } from 'react'
 import { useStore, useRoute } from '../store'
 import { Icon } from '../icons'
 import { Art, routeOf, useMobile } from '../ui'
-import { pickLocalFiles, pickPlaylistCsv } from '../commands'
+import { pickLocalFiles } from '../commands'
 import { playItem } from '../player'
 
-export function useLibraryItems(filter, sort, q) {
-  const { liked, local, playlists, recents, pinned, name, spotifyUser, spotifyPlaylists } = useStore()
+export function useLibraryItems(sort, q) {
+  const { liked, local, playlists, recents, pinned, name } = useStore()
   let items = [
-    { kind: 'liked', id: 'liked', name: 'Liked Songs', sub: `Playlist • ${liked.length} song${liked.length === 1 ? '' : 's'}`, type: 'calify' },
-    ...(local.length ? [{ kind: 'local', id: 'local', name: 'Local Files', sub: `Playlist • ${local.length} songs`, type: 'calify' }] : []),
-    ...(spotifyUser ? [{ kind: 'sliked', id: 'sliked', name: 'Liked Songs', sub: 'Playlist • Spotify', type: 'spotify' }, ...spotifyPlaylists.map(p => ({ ...p, type: 'spotify' }))] : []),
-    ...playlists.map(p => ({ kind: 'playlist', id: p.id, name: p.name, sub: `Playlist • ${name}`, type: 'calify', addedAt: p.createdAt })),
+    { kind: 'liked', id: 'liked', name: 'Liked Songs', sub: `Playlist • ${liked.length} song${liked.length === 1 ? '' : 's'}` },
+    ...(local.length ? [{ kind: 'local', id: 'local', name: 'Local Files', sub: `Playlist • ${local.length} songs` }] : []),
+    ...playlists.map(p => ({ kind: 'playlist', id: p.id, name: p.name, sub: `Playlist • ${name}`, addedAt: p.createdAt })),
   ]
-  if (filter === 'calify' || filter === 'spotify') items = items.filter(i => i.type === filter)
   if (q) items = items.filter(i => i.name.toLowerCase().includes(q.toLowerCase()))
   const recentAt = it => recents.find(r => r.kind === it.kind && r.id === it.id)?.at || it.addedAt || 0
   const by = {
@@ -27,7 +25,6 @@ export function useLibraryItems(filter, sort, q) {
 export const createMenu = () => [
   { label: 'Playlist', icon: 'note', onClick: () => useStore.getState().createPlaylist() },
   { label: 'Import local files', icon: 'file', onClick: pickLocalFiles },
-  { label: 'Import Spotify playlist (CSV)', icon: 'list', onClick: pickPlaylistCsv },
 ]
 
 export function itemMenu(it) {
@@ -43,23 +40,15 @@ export function itemMenu(it) {
 const SORTS = { recents: 'Recents', added: 'Recently Added', alpha: 'Alphabetical' }
 
 export function LibraryList({ big }) {
-  const { libFilter, libSort, libFilterOpen, go, openMenu, pinned, spotifyUser } = useStore()
+  const { libSort, libFilterOpen, go, openMenu, pinned } = useStore()
   const ctx = useStore(s => s.ctx)
   const playing = useStore(s => s.playing)
   const r = useRoute()
   const [q, setQ] = useState('')
-  const items = useLibraryItems(libFilter, libSort, q)
+  const items = useLibraryItems(libSort, q)
   const set = useStore.setState
   return (
     <>
-      <div className="chips lib-chips">
-        {spotifyUser && libFilter && <button className="chip x" aria-label="Clear filter" onClick={() => set({ libFilter: null })}><Icon name="close" size={14} /></button>}
-        {spotifyUser && ['calify', 'spotify'].filter(f => !libFilter || libFilter === f).map(f => (
-          <button key={f} className={`chip ${libFilter === f ? 'on' : ''}`} onClick={() => set({ libFilter: libFilter === f ? null : f })}>
-            {f === 'calify' ? 'Calify' : 'Spotify'}
-          </button>
-        ))}
-      </div>
       <div className="lib-tools">
         <div className={`lib-search ${libFilterOpen || q ? 'open' : ''}`}>
           <button className="icon-btn" aria-label="Search in Your Library" onClick={() => { set({ libFilterOpen: true }); setTimeout(() => document.getElementById('lib-filter')?.focus()) }}>
@@ -96,7 +85,7 @@ export function LibraryList({ big }) {
 
 export function Library() {
   const { libCollapsed, go, openMenu } = useStore()
-  const items = useLibraryItems(null, useStore(s => s.libSort))
+  const items = useLibraryItems(useStore(s => s.libSort))
   const mobile = useMobile()
   const set = useStore.setState
   if (libCollapsed && !mobile) return (

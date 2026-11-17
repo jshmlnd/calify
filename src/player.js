@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import { MediaSession } from '@capgo/capacitor-media-session'
 import { useStore as S } from './store'
 import { localFile } from './local'
-import * as sp from './spotify'
 
 export const audio = new Audio()
 audio.preload = 'auto'
@@ -22,14 +21,6 @@ export async function load(track, autoplay = true) {
   const my = ++token
   S.setState({ current: track })
   usePos.setState({ t: 0, d: track.duration || 0 })
-  if (track.source === 'spotify') {
-    audio.pause()
-    S.getState().pushHistory(track)
-    setSession(track)
-    if (autoplay) sp.playTrack(track).catch(e => my === token && S.getState().toastMsg(e.message))
-    return
-  }
-  sp.sdk.pause()
   const src = await srcFor(track)
   if (my !== token) return
   if (!src) { S.getState().toastMsg('This file is no longer available'); return }
@@ -39,7 +30,7 @@ export async function load(track, autoplay = true) {
   setSession(track)
 }
 
-// Spotify-style queue: a context (playlist/album) in play order, plus a user "Next in queue" list that plays first.
+// Queue model: a context (playlist/album) in play order, plus a user "Next in queue" list that plays first.
 function makeOrder(n, first, shuffle) {
   const idx = [...Array(n).keys()]
   if (!shuffle) return { order: idx, pos: first }
@@ -80,18 +71,16 @@ export function prev() {
 export function toggle() {
   const { current } = S.getState()
   if (!current) return
-  if (isSp()) return S.getState().playing ? sp.sdk.pause() : sp.resumeOrPlay(current).catch(e => S.getState().toastMsg(e.message))
   if (!audio.src) return load(current)
   audio.paused ? audio.play().catch(() => {}) : audio.pause()
 }
 
-const isSp = () => S.getState().current?.source === 'spotify'
-export const resume = () => (isSp() ? sp.sdk.resume() : audio.play().catch(() => {}))
-export const pause = () => (isSp() ? sp.sdk.pause() : audio.pause())
+export const resume = () => audio.play().catch(() => {})
+export const pause = () => audio.pause()
 export const seek = t => {
   if (!Number.isFinite(t)) return
   t = Math.max(0, t)
-  if (isSp()) { sp.sdk.seek(t * 1000); usePos.setState({ t }) } else audio.currentTime = t
+  audio.currentTime = t
 }
 export const seekBy = d => seek(usePos.getState().t + d)
 
@@ -124,8 +113,6 @@ export async function tracksOf(item) {
   switch (item.kind) {
     case 'liked': return s.liked
     case 'local': return s.local
-    case 'sliked': return sp.liked()
-    case 'splaylist': return sp.playlistTracks(item.id)
     case 'history': return s.history
     case 'playlist': return s.playlists.find(p => p.id === item.id)?.tracks || []
     case 'track': return [item.track]
@@ -155,7 +142,7 @@ audio.addEventListener('error', () => {
   if (++errors < 4) setTimeout(() => next(true), 800)  // skip, but don't spin forever when offline
 })
 
-const applyVolume = s => { audio.volume = s.muted ? 0 : s.volume; sp.sdk.volume(audio.volume) }
+const applyVolume = s => { audio.volume = s.muted ? 0 : s.volume }
 applyVolume(S.getState())
 S.subscribe(applyVolume)
 
@@ -180,22 +167,3 @@ audio.addEventListener('timeupdate', () => {
   lastPos = audio.currentTime
   MediaSession.setPositionState({ duration: audio.duration, position: Math.min(audio.currentTime, audio.duration), playbackRate: 1 }).catch(() => {})
 })
-
-// ---- Spotify engine: the SDK reports state changes but no ticking time, so poll while playing.
-let lastSp = null
-sp.onState(st => {
-  if (!st || !isSp()) return
-  usePos.setState({ t: st.position / 1000, d: st.duration / 1000 })
-  if (S.getState().playing === st.paused) {
-    S.setState({ playing: !st.paused })
-    MediaSession.setPlaybackState({ playbackState: st.paused ? 'paused' : 'playing' }).catch(() => {})
-  }
-  // A finished track lands paused at 0 straight after playing; a user pause keeps its position.
-  if (st.paused && st.position === 0 && lastSp && !lastSp.paused && lastSp.position > 1000) next(true)
-  lastSp = st
-})
-setInterval(async () => {
-  if (!isSp() || !S.getState().playing) return
-  const st = await sp.sdk.state()
-  if (st) usePos.setState({ t: st.position / 1000 })
-}, 500)
