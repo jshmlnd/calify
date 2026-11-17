@@ -68,15 +68,13 @@ export default function App() {
   const profile = useStore(s => s.profile), user = useStore(s => s.user)
   // Persisted profile applies at boot (before any network); signed out is always Calico + ginger.
   useEffect(() => { applyTheme(user && profile ? profile : {}) }, [profile, user])
-  // Android checks on start only when signed in, at most once a day (desktop: 10 s after start, below).
+  // Android checks quietly on start at most once a day (desktop: 10 s after start, below). A failed check doesn't count.
   useEffect(() => {
-    if (!user || Capacitor.getPlatform() !== 'android') return
-    try {
-      if (Date.now() - (+localStorage.getItem('calify-update-check') || 0) < 864e5) return
-      localStorage.setItem('calify-update-check', Date.now())
-    } catch {}
-    checkUpdates(true)
-  }, [user])
+    if (Capacitor.getPlatform() !== 'android') return
+    const KEY = 'calify-update-check'
+    try { if (Date.now() - (+localStorage.getItem(KEY) || 0) < 864e5) return } catch {}
+    checkUpdates(true).then(ok => { try { ok && localStorage.setItem(KEY, Date.now()) } catch {} })
+  }, [])
 
   useEffect(() => {
     // Show What's New once per version; a fresh install (nothing stored, empty library) just records it.

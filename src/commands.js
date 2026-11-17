@@ -60,6 +60,7 @@ export const cmd = {
 }
 
 // "Check for updates". quiet = the startup check: it says nothing unless there is an update to offer.
+// Resolves false when the check itself failed (offline, rate limit, server error).
 export const canUpdate = () => !!window.calify?.updates || Capacitor.getPlatform() === 'android'
 export async function checkUpdates(quiet) {
   const say = m => quiet || S().toastMsg(m)
@@ -69,14 +70,15 @@ export async function checkUpdates(quiet) {
     if (r === 'none') say("You're up to date")
     else if (r === 'downloading') say('Downloading update…')
     else if (r === 'error') say("Couldn't check for updates. Try again later.")
-    return   // 'ready': the update bar (onReady) already says so
+    return r !== 'error'   // 'ready': the update bar (onReady) already says so
   }
   try {
     const info = await checkForUpdate()
-    if (!info) return say("You're up to date")
-    if (quiet) useStore.setState({ update: info })   // the update bar offers it; never download unasked
+    if (!info) say("You're up to date")
+    else if (quiet) useStore.setState({ update: info })   // the update bar offers it; never download unasked
     else await installAndroid(info)
-  } catch { say("Couldn't check for updates. Try again later.") }
+    return true
+  } catch { say("Couldn't check for updates. Try again later."); return false }
 }
 // Android: download the APK, then Android shows its install prompt.
 export function installAndroid(info) {

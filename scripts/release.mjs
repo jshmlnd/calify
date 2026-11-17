@@ -15,11 +15,32 @@ const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 globalThis.__APP_VERSION__ = version
 const { CHANGELOG } = await import('../src/changelog.js')
 const entry = CHANGELOG[0]
-if (entry.version !== version) throw new Error(`CHANGELOG[0] is ${entry.version}, package.json is ${version}`)
 
+// Checks run before anything builds or uploads. A dry run reports them and carries on.
+const problems = []
+const check = (ok, msg) => { if (!ok) problems.push(msg) }
+const git = (...a) => { try { return execFileSync('git', a, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() } catch { return '' } }
+check(entry.version === version, `CHANGELOG[0] is ${entry.version}, package.json is ${version}`)
+// Android refuses an APK whose versionCode isn't higher than the installed one.
+const gradleVer = text => ({ name: /versionName\s+"([^"]+)"/.exec(text)?.[1], code: +/versionCode\s+(\d+)/.exec(text)?.[1] || 0 })
+const android = gradleVer(readFileSync(join(root, 'android/app/build.gradle'), 'utf8'))
+check(android.name === version, `android/app/build.gradle versionName is ${android.name}, package.json is ${version}`)
+check(android.code > 1, `android/app/build.gradle versionCode is missing or not above 1`)
+let lastTag = ''
+try { lastTag = execFileSync('gh', ['api', 'repos/jshmlnd/calify/releases/latest', '-q', '.tag_name'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() } catch {}
+const last = lastTag && gradleVer(git('show', `${lastTag}:android/app/build.gradle`))
+if (last?.code) check(android.code > last.code, `versionCode ${android.code} is not above ${last.code} (last release ${lastTag}); bump it in android/app/build.gradle`)
+else console.log(`(couldn't read the last release's versionCode${lastTag ? ` from tag ${lastTag}` : ''}; only checked it is above 1)`)
 const tag = `v${version}`
-// The tag is created at this commit when the draft is published, so it must already be pushed.
-const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
+// The tag is created at this commit when the draft is published, so it must be committed and on GitHub.
+const sha = git('rev-parse', 'HEAD')
+check(git('status', '--porcelain') === '', 'Uncommitted changes: commit or stash them first')
+check(git('branch', '-r', '--contains', 'HEAD') !== '', 'HEAD is not on the remote: git push first')
+if (problems.length) {
+  console.log(problems.map(p => `! ${p}`).join('\n'))
+  if (!dry) process.exit(1)
+  console.log('(dry run: a real run would stop here)\n')
+}
 const win = process.platform === 'win32'
 const apkOut = join(root, 'android/app/build/outputs/apk/release/app-release.apk')
 const apk = join(root, `release/Calify-${version}.apk`)
