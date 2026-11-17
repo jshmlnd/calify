@@ -17,7 +17,7 @@ function useCollection(kind, id) {
     case 'history': return { kind, id, name: 'Recently played', type: 'Playlist', tracks: s.history, ...owner }
     case 'playlist': {
       const p = s.playlists.find(x => x.id === id)
-      return p ? { kind, id, name: p.name, description: p.description, type: 'Playlist', tracks: p.tracks, editable: true, ...owner } : { missing: true }
+      return p ? { kind, id, name: p.name, description: p.description, type: p.public ? 'Public playlist' : 'Playlist', public: !!p.public, tracks: p.tracks, editable: true, ...owner } : { missing: true }
     }
     default: return { missing: true }
   }
@@ -30,6 +30,7 @@ export function Collection({ kind, id }) {
   const [find, setFind] = useState(false)
   const { openMenu, shuffle, updatePlaylist, deletePlaylist } = useStore()
   const mobile = useMobile()
+  const signedIn = useStore(s => !!s.user)
   const cover = c.art || c.tracks?.find(t => t.art)?.art
   const color = useColor(kind === 'liked' ? null : cover, kind === 'liked' ? 'liked' : c.name, 0.34, 0.6)
   const bg = kind === 'liked' ? 'hsl(24 62% 36%)' : kind === 'local' ? 'hsl(24 22% 18%)' : color
@@ -40,6 +41,7 @@ export function Collection({ kind, id }) {
   const menu = e => openMenu(e, [
     { label: 'Add to queue', icon: 'queue', onClick: () => addToQueue(c.tracks) },
     c.editable && { label: 'Edit details', icon: 'edit', onClick: () => setEdit(true) },
+    c.editable && signedIn && { label: c.public ? 'Make private' : 'Make public', onClick: () => updatePlaylist(id, { public: !c.public }) },
     c.editable && { label: 'Delete', icon: 'trash', onClick: () => confirm(`Delete "${c.name}"? This can't be undone.`) && deletePlaylist(id) },
     kind === 'local' && { label: 'Import more files', icon: 'file', onClick: pickLocalFiles },
     ...(['liked', 'playlist', 'local'].includes(kind) ? itemMenu(item).slice(1) : []),

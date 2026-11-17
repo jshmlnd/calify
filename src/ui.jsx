@@ -222,7 +222,7 @@ export function Shelf({ title, items, onShowAll, children }) {
 }
 
 // ---------- Track list (playlist table, search songs, artist popular)
-export function TrackList({ tracks, ctx, playlistId, showAlbum = true, showAdded, header = true, limit, onPlay }) {
+export function TrackList({ tracks, ctx, playlistId, showAlbum = true, showAdded, header = true, limit, onPlay, readOnly }) {
   const current = useStore(s => s.current)
   const playing = useStore(s => s.playing)
   const openMenu = useStore(s => s.openMenu)
@@ -240,17 +240,17 @@ export function TrackList({ tracks, ctx, playlistId, showAlbum = true, showAdded
         </div>
       )}
       {list.map((t, i) => {
-        const isCur = current?.id === t.id
+        const isCur = !readOnly && current?.id === t.id
         return (
           <div key={t.id + i} role="row" className={`tl-row${isCur ? ' current' : ''}${sel === i ? ' selected' : ''}`}
-            onClick={() => (mobile ? play(i) : setSel(i))} onDoubleClick={() => play(i)}
-            onContextMenu={e => openMenu(e, trackMenu(t, { playlistId }))}>
+            onClick={() => (mobile && !readOnly ? play(i) : setSel(i))} onDoubleClick={readOnly ? undefined : () => play(i)}
+            onContextMenu={readOnly ? undefined : e => openMenu(e, trackMenu(t, { playlistId }))}>
             {!mobile && (
               <span className="tl-num">
                 {isCur && playing ? <Eq /> : <span className="n">{i + 1}</span>}
-                <button className="tl-play" aria-label={`Play ${t.title}`} onClick={e => { e.stopPropagation(); play(i) }}>
+                {!readOnly && <button className="tl-play" aria-label={`Play ${t.title}`} onClick={e => { e.stopPropagation(); play(i) }}>
                   <Icon name={isCur && playing ? 'pause' : 'play'} size={16} />
-                </button>
+                </button>}
               </span>
             )}
             <span className="tl-title">
@@ -265,11 +265,11 @@ export function TrackList({ tracks, ctx, playlistId, showAlbum = true, showAdded
             {showAlbum && !mobile && <span className="tl-album">{t.album}</span>}
             {showAlbum && showAdded && !mobile && <span className="tl-added">{t.addedAt ? ago(t.addedAt) : ''}</span>}
             <span className="tl-dur">
-              {!mobile && <LikeButton track={t} />}
+              {!mobile && !readOnly && <LikeButton track={t} />}
               {!mobile && <span className="d">{fmt(t.duration)}</span>}
-              <button className="icon-btn tl-more" aria-label="More options" onClick={e => { e.stopPropagation(); openMenu(e, trackMenu(t, { playlistId })) }}>
+              {!readOnly && <button className="icon-btn tl-more" aria-label="More options" onClick={e => { e.stopPropagation(); openMenu(e, trackMenu(t, { playlistId })) }}>
                 <Icon name="dots" size={16} />
-              </button>
+              </button>}
             </span>
           </div>
         )

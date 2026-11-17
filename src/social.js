@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 import { useStore } from './store'
 import { resizeImage } from './image'
-import { cleanPatch, lastPlayedOf, lastPlayedPlan, likeOf, fresh, splitPath, SIGN_SECONDS } from './profiledata.js'
+import { cleanPatch, publicTracks, lastPlayedOf, lastPlayedPlan, likeOf, fresh, splitPath, SIGN_SECONDS } from './profiledata.js'
 
 const me = () => useStore.getState().user?.id
 const must = ({ data, error }) => { if (error) throw error; return data }
@@ -99,3 +99,48 @@ async function saveLastPlayed(track, uid) {
   last = { uid, id: track.id, artist: track.artist, album: track.album, art_path: art }
   if (old !== art) removeImage(old)
 }
+
+// ---------- Public playlists (metadata only). Published rows are keyed (owner, local_id).
+const covers = new Map() // local_id -> id of the track whose art is the uploaded cover
+export async function publishPlaylist(p) {
+  const uid = me(), s = useStore.getState()
+  const old = must(await supabase.from('public_playlists').select('cover_path').eq('owner', uid).eq('local_id', p.id).maybeSingle())?.cover_path || null
+  const first = p.tracks[0], src = first && (s.localArt[first.id] || first.art)
+  let cover = old
+  if (!old || covers.get(p.id) !== first?.id) {
+    cover = null
+    if (src) cover = await fetch(src).then(r => r.blob()).then(b => resizeImage(b, 300)).then(b => uploadImage('cover', b)).catch(() => null)
+    covers.set(p.id, first?.id)
+  }
+  try {
+    must(await supabase.from('public_playlists').upsert({ owner: uid, local_id: p.id, name: p.name, cover_path: cover, tracks: publicTracks(p.tracks), updated_at: new Date().toISOString() }, { onConflict: 'owner,local_id' }))
+  } catch (e) { if (cover !== old) removeImage(cover); throw e }
+  if (old && old !== cover) removeImage(old)
+}
+export async function unpublishPlaylist(localId) {
+  const rows = must(await supabase.from('public_playlists').delete().eq('owner', me()).eq('local_id', localId).select('cover_path'))
+  covers.delete(localId)
+  rows?.forEach(r => removeImage(r.cover_path))
+}
+export const publicPlaylists = async userId =>
+  must(await supabase.from('public_playlists').select('id, name, cover_path, updated_at').eq('owner', userId).order('updated_at', { ascending: false }))
+export const publicPlaylist = async id => must(await supabase.from('public_playlists').select('*').eq('id', id).maybeSingle())
+
+// Keeps published copies in step with the local playlist: publish/unpublish at once on toggle or delete, others debounced 2 s.
+const timers = new Map()
+const fail = e => useStore.getState().toastMsg(e.message || "Couldn't update the public playlist")
+const sync = id => {
+  clearTimeout(timers.get(id)); timers.delete(id)
+  const p = useStore.getState().playlists.find(x => x.id === id)
+  if (p?.public) publishPlaylist(p).catch(fail)
+}
+if (supabase) useStore.subscribe((s, prev) => {
+  if (!s.user || s.playlists === prev.playlists) return
+  for (const pp of prev.playlists) if (pp.public && !s.playlists.some(x => x.id === pp.id)) unpublishPlaylist(pp.id).catch(fail)
+  for (const p of s.playlists) {
+    const o = prev.playlists.find(x => x.id === p.id)
+    if (!o || o === p) continue
+    if (p.public !== o.public) p.public ? sync(p.id) : unpublishPlaylist(p.id).catch(fail)
+    else if (p.public && (p.name !== o.name || p.tracks !== o.tracks)) { clearTimeout(timers.get(p.id)); timers.set(p.id, setTimeout(() => sync(p.id), 2000)) }
+  }
+})

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cleanPatch, lastPlayedOf, lastPlayedPlan, likeOf, fresh, splitPath, HOUR, SIGN_SECONDS } from '../src/profiledata.js'
+import { publicTracks, cleanPatch, lastPlayedOf, lastPlayedPlan, likeOf, fresh, splitPath, HOUR, SIGN_SECONDS } from '../src/profiledata.js'
 import { accentVars, contrast, SURFACE } from '../src/theme.js'
 
 test('cleanPatch trims and enforces name 1–40 and bio ≤ 160', () => {
@@ -60,4 +60,15 @@ test('lastPlayedPlan skips, reuses the cover, or uploads', () => {
 test('likeOf escapes wildcards', () => {
   assert.equal(likeOf(' jo '), '%jo%')
   assert.equal(likeOf('50%_a\\'), '%50\\%\\_a\\\\%')
+})
+
+test('publicTracks keeps metadata only, caps count and string length', () => {
+  const t = { id: 'x', title: 'a'.repeat(300), artist: 'b', album: undefined, duration: 12.6, art: 'blob:1', url: 'secret' }
+  const out = publicTracks(Array(600).fill(t))
+  assert.equal(out.length, 500)
+  assert.deepEqual(Object.keys(out[0]), ['title', 'artist', 'album', 'duration'])
+  assert.equal(out[0].title.length, 200)
+  assert.equal(out[0].album, '')
+  assert.equal(out[0].duration, 13)
+  assert.deepEqual(publicTracks(null), [])
 })

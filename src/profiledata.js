@@ -37,3 +37,9 @@ export function lastPlayedPlan({ signedIn, privateSession, online, track, prev: 
 
 // Escapes ilike wildcards so a search for "50%" matches text, not everything.
 export const likeOf = q => `%${q.trim().replace(/[\\%_]/g, '\\$&')}%`
+
+// public_playlists.tracks has no DB size cap: metadata only, at most 500 tracks, strings cut.
+export const MAX_PUBLIC_TRACKS = 500
+export const publicTracks = tracks => (tracks || []).slice(0, MAX_PUBLIC_TRACKS).map(t => ({
+  title: cut(t.title, 200), artist: cut(t.artist, 200), album: cut(t.album, 200), duration: Number.isFinite(t.duration) ? Math.round(t.duration) : 0,
+}))

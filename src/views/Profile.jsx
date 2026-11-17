@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../store'
-import { Spinner, useAsync } from '../ui'
+import { Spinner, Shelf, useAsync, TrackList, fmtLong } from '../ui'
 import { Icon } from '../icons'
 import { Avatar } from '../parts/TopBar'
 import { THEMES, ACCENTS, accentVars, readableAccent } from '../theme'
-import { getProfile, counts as getCounts, follow, unfollow, isFollowing, saveProfile, uploadImage, removeImage, useImageUrl } from '../social'
+import { getProfile, counts as getCounts, follow, unfollow, isFollowing, saveProfile, publicPlaylists, publicPlaylist, uploadImage, removeImage, useImageUrl } from '../social'
 import { resizeImage } from '../image'
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`
@@ -76,8 +76,55 @@ function LastPlayed({ lp }) {
   )
 }
 
-// Task 9: "Public playlists" cards (Shelf of the owner's public_playlists).
-function PublicPlaylists() { return null }
+function PublicPlaylists({ id }) {
+  const res = useAsync(() => publicPlaylists(id), [id])
+  const go = useStore.getState().go
+  if (!res.data?.length) return null
+  return (
+    <Shelf title="Public playlists">
+      <div className="card-row">{res.data.map(p => <PlaylistCard key={p.id} p={p} onClick={() => go({ name: 'pplaylist', id: p.id })} />)}</div>
+    </Shelf>
+  )
+}
+function PlaylistCard({ p, onClick }) {
+  const art = useImageUrl(p.cover_path)
+  return (
+    <div className="card" role="link" tabIndex={0} onClick={onClick} onKeyDown={e => e.key === 'Enter' && onClick()}>
+      <div className="card-art">{art ? <img className="art" src={art} alt="" /> : <div className="art art-empty"><Icon name="note" size="40%" /></div>}</div>
+      <div className="card-title">{p.name}</div>
+      <div className="card-sub">Playlist</div>
+    </div>
+  )
+}
+
+// Someone's public playlist: header and table only, nothing playable.
+export function PublicPlaylist({ id }) {
+  const user = useStore(s => s.user), go = useStore.getState().go
+  const res = useAsync(() => user ? publicPlaylist(id) : Promise.reject(new Error('Sign in to see playlists')), [id, user?.id])
+  const owner = useAsync(() => res.data ? getProfile(res.data.owner) : Promise.resolve(null), [res.data?.owner])
+  const art = useImageUrl(res.data?.cover_path)
+  if (res.loading) return <div className="view"><Spinner /></div>
+  const p = res.data
+  if (!p) return <div className="view empty"><h2>Couldn't open that</h2><p>{res.error?.message || 'It may have been made private, or you are offline.'}</p></div>
+  const tracks = p.tracks.map((t, i) => ({ ...t, id: `${p.id}:${i}` }))
+  const total = tracks.reduce((a, t) => a + (t.duration || 0), 0)
+  return (
+    <div className="view scroll-y coll" style={{ '--c': 'hsl(24 22% 18%)' }}>
+      <header className="coll-head">
+        <div className="coll-art">{art ? <img className="art" src={art} alt="" /> : <div className="art art-empty"><Icon name="note" size="40%" /></div>}</div>
+        <div className="coll-info">
+          <span className="coll-type">Public playlist</span>
+          <h1 className={p.name.length > 22 ? 'long' : ''}>{p.name}</h1>
+          <p className="coll-meta">{owner.data && <><a onClick={() => go({ name: 'profile', id: p.owner })}><b>{owner.data.name}</b></a> • </>}{plural(tracks.length, 'song')}{total > 0 && `, ${fmtLong(total)}`}</p>
+        </div>
+      </header>
+      <div className="coll-body">
+        {tracks.length > 0 && <TrackList tracks={tracks} readOnly />}
+        <div className="view-foot" />
+      </div>
+    </div>
+  )
+}
 
 // Picks an image, shows it resized, uploads only on Save.
 function useImagePick(max) {
