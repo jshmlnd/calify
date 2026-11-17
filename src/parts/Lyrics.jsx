@@ -22,9 +22,8 @@ export const activeLine = (lines, t) => {
 
 // Synced lines: past lines dim, current line white, scroll keeps the current line in view.
 export function LyricsLines({ lyrics, className = '', scroll = true }) {
-  const t = usePos(s => s.t)
+  const cur = usePos(s => lyrics.synced ? activeLine(lyrics.lines, s.t) : -1)
   const box = useRef()
-  const cur = lyrics.synced ? activeLine(lyrics.lines, t) : -1
   useEffect(() => {
     if (!scroll || cur < 0) return
     const el = box.current?.children[cur]

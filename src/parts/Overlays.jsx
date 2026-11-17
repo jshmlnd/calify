@@ -110,6 +110,7 @@ export function FullScreen() {
   const art = useStore(s => current && (current.art || s.localArt[current.id]))
   const ctx = useStore(s => s.ctx)
   const lyrics = useLyrics(current)
+  const color = useColor(art, current?.title, 0.22, 0.5)
   const exit = () => { useStore.setState({ fullscreen: false }); document.fullscreenElement && document.exitFullscreen() }
   useEffect(() => {
     const f = () => !document.fullscreenElement && useStore.setState({ fullscreen: false })
@@ -117,7 +118,7 @@ export function FullScreen() {
     return () => document.removeEventListener('fullscreenchange', f)
   }, [])
   return (
-    <div className="fs" style={{ '--art': art ? `url(${art})` : 'none' }}>
+    <div className="fs" style={{ '--art': art ? `url(${art})` : 'none', '--fs-c': color }}>
       <div className="fs-bg" />
       <header className="fs-head"><small>PLAYING FROM {ctx ? 'PLAYLIST' : 'CALIFY'}</small><b>{ctx?.name}</b></header>
       {lyrics.status === 'ok' && lyrics.data.synced && <div className="fs-lyrics scroll-y"><LyricsLines lyrics={lyrics.data} className="big" /></div>}

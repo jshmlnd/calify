@@ -46,6 +46,8 @@ export default function App() {
     loadLocal().then(({ tracks, art }) => useStore.setState({ local: tracks, localArt: art })).catch(() => {})
     window.calify?.zoom(useStore.getState().zoom)
     addEventListener('keydown', onKey)
+    const vis = () => document.documentElement.classList.toggle('is-hidden', document.visibilityState === 'hidden')
+    document.addEventListener('visibilitychange', vis)
     if (Capacitor.isNativePlatform()) {
       CapApp.addListener('backButton', () => {
         const s = useStore.getState()
@@ -56,7 +58,7 @@ export default function App() {
         else CapApp.minimizeApp()
       })
     }
-    return () => removeEventListener('keydown', onKey)
+    return () => { removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', vis) }
   }, [])
 
   if (mini) return <MiniWindow />
