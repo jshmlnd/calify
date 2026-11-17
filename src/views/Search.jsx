@@ -4,6 +4,8 @@ import { Art, Spinner, TrackList, useAsync, useMobile } from '../ui'
 import { playContext } from '../player'
 import { Icon } from '../icons'
 import { CaliCat } from '../parts/CaliCat'
+import { PersonCard } from './People'
+import { searchPeople } from '../social'
 
 function useDebounced(v, ms) {
   const [d, setD] = useState(v)
@@ -14,13 +16,14 @@ function useDebounced(v, ms) {
 export function Search({ q = '' }) {
   const query = useDebounced(q.trim(), 300)
   const [tab, setTab] = useState('all')
-  const { local, addRecentSearch } = useStore()
+  const { local, addRecentSearch } = useStore(), signedIn = useStore(s => !!s.user)
   const mobile = useMobile()
   const res = useAsync(async () => {
     if (!query) return null
     const ql = query.toLowerCase()
-    return { tracks: local.filter(t => `${t.title} ${t.artist} ${t.album}`.toLowerCase().includes(ql)) }
-  }, [query])
+    const people = signedIn && query.length >= 2 ? await searchPeople(query).catch(() => []) : []
+    return { tracks: local.filter(t => `${t.title} ${t.artist} ${t.album}`.toLowerCase().includes(ql)), people }
+  }, [query, signedIn])
 
   if (!q.trim()) return (
     <div className="view scroll-y pad-view">
@@ -43,9 +46,13 @@ export function Search({ q = '' }) {
         ))}
       </div>
       {(res.loading || query !== q.trim()) && !r && <Spinner />}
-      {r && !r.tracks.length && (
+      {r && !r.tracks.length && !r.people.length && (
         <div className="empty"><CaliCat size={96} state="asleep" /><h2>No results found for "{query}"</h2>
           <p>Please make sure your words are spelled correctly, or use fewer or different keywords.</p></div>
+      )}
+      {r?.people.length > 0 && (
+        <section className="shelf"><header className="shelf-head"><h2>People</h2></header>
+          <div className="card-row">{r.people.map(p => <PersonCard key={p.id} p={p} />)}</div></section>
       )}
       {r && tab === 'all' && (top || r.tracks.length > 0) && (
         <div className="top-row">

@@ -28,8 +28,12 @@ const cut = (s, n) => String(s || '').slice(0, n)
 export const lastPlayedOf = (t, art_path = null) => ({ title: cut(t.title, 120), artist: cut(t.artist, 120), art_path })
 
 // setLastPlayed's decision: null = skip, 'reuse' = keep prev's cover (same artist and album), 'upload' = new cover.
-// prev is the last saved { id, artist, album, art_path } this session.
-export function lastPlayedPlan({ signedIn, privateSession, online, track, prev }) {
+// prev is the last saved { uid, id, artist, album, art_path } this session; another account's prev is ignored.
+export function lastPlayedPlan({ signedIn, privateSession, online, track, prev: p, uid }) {
+  const prev = p?.uid === uid ? p : null
   if (!signedIn || privateSession || online === false || !track || track.id === prev?.id) return null
   return prev?.art_path && track.album && prev.album === track.album && prev.artist === track.artist ? 'reuse' : 'upload'
 }
+
+// Escapes ilike wildcards so a search for "50%" matches text, not everything.
+export const likeOf = q => `%${q.trim().replace(/[\\%_]/g, '\\$&')}%`

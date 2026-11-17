@@ -708,3 +708,10 @@ input, textarea { caret-color: var(--accent); }
 .swatch.custom::-webkit-color-swatch-wrapper { padding: 0; }
 .swatch.custom::-webkit-color-swatch { border: 0; border-radius: 50%; }
 .mobile .prof-sec { padding: 0 16px; }
+
+/* ===== People (follow lists, search) ===== */
+.card-row.wrap { grid-auto-rows: auto; overflow: visible; margin: 0 -12px; }
+.mobile .card-row.wrap { flex-wrap: wrap; overflow: visible; }
+.person .avatar { width: 100% !important; height: auto !important; aspect-ratio: 1; font-size: 64px !important; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+.coll-meta a { cursor: pointer; }
+.coll-meta a:hover { text-decoration: underline; }

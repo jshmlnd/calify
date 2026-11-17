@@ -4,7 +4,7 @@ import { Spinner, useAsync } from '../ui'
 import { Icon } from '../icons'
 import { Avatar } from '../parts/TopBar'
 import { THEMES, ACCENTS, accentVars, readableAccent } from '../theme'
-import { getProfile, getCounts, saveProfile, uploadImage, removeImage, useImageUrl } from '../social'
+import { getProfile, counts as getCounts, follow, unfollow, isFollowing, saveProfile, uploadImage, removeImage, useImageUrl } from '../social'
 import { resizeImage } from '../image'
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`
@@ -15,11 +15,12 @@ export function Profile({ id }) {
   const res = useAsync(() => user ? getProfile(id) : Promise.reject(new Error('Sign in to see profiles')), [id, user?.id])
   const counts = useAsync(() => user ? getCounts(id) : Promise.resolve(null), [id, user?.id])
   const [edit, setEdit] = useState(false)
+  const [delta, setDelta] = useState(0) // followers change from this viewer's own follow/unfollow
   const p = mine || res.data
   const bg = useImageUrl(p?.background_path)
   if (!p && res.loading) return <div className="view"><Spinner /></div>
   if (!p) return <div className="view empty"><h2>Couldn't open that profile</h2><p>{res.error?.message || "You may be offline."}</p></div>
-  const own = user?.id === id, c = counts.data
+  const own = user?.id === id, go = useStore.getState().go, c = counts.data
   // Owner's accent, made readable for this viewer's theme, scoped to this page only.
   const vars = { ...accentVars(p.accent, viewerTheme), '--c': 'color-mix(in srgb, var(--accent) 50%, #000)' }
   return (
@@ -30,13 +31,13 @@ export function Profile({ id }) {
           <span className="coll-type">Profile</span>
           <h1 className={p.name?.length > 22 ? 'long' : ''}>{p.name}</h1>
           {p.bio && <p className="coll-desc">{p.bio}</p>}
-          {c && <p className="coll-meta">{plural(c.playlists, 'public playlist')} · {plural(c.followers, 'follower')} · {c.following} following</p>}
+          {c && <p className="coll-meta">{plural(c.playlists, 'public playlist')} · <a onClick={() => go({ name: 'people', id, which: 'followers' })}>{plural(c.followers + delta, 'follower')}</a> · <a onClick={() => go({ name: 'people', id, which: 'following' })}>{c.following} following</a></p>}
         </div>
       </header>
       <div className="coll-body">
         <div className="action-bar">
           {own ? <button className="outline-btn" onClick={() => setEdit(true)}><Icon name="edit" size={16} /> Edit</button>
-            : null /* Task 8: Follow / Following button goes here */}
+            : <FollowButton id={id} onChange={d => setDelta(x => x + d)} />}
         </div>
         {p.last_played?.title && <LastPlayed lp={p.last_played} />}
         <PublicPlaylists id={id} />
@@ -45,6 +46,20 @@ export function Profile({ id }) {
       {edit && <EditProfile p={p} onClose={() => setEdit(false)} />}
     </div>
   )
+}
+
+// Optimistic: flips at once, reverts with a toast if the write fails.
+function FollowButton({ id, onChange }) {
+  const st = useAsync(() => isFollowing(id), [id])
+  const [on, setOn] = useState(null), [busy, setBusy] = useState(false)
+  const v = on ?? st.data
+  if (v === undefined) return null
+  const click = async () => {
+    setBusy(true); setOn(!v); onChange(v ? -1 : 1)
+    try { await (v ? unfollow : follow)(id) } catch (e) { setOn(v); onChange(v ? 1 : -1); useStore.getState().toastMsg(e.message) }
+    setBusy(false)
+  }
+  return <button className="outline-btn" disabled={busy} aria-pressed={v} onClick={click}>{v ? 'Following' : 'Follow'}</button>
 }
 
 // Shown, not playable.

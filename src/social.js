@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 import { useStore } from './store'
 import { resizeImage } from './image'
-import { cleanPatch, lastPlayedOf, lastPlayedPlan, fresh, splitPath, SIGN_SECONDS } from './profiledata.js'
+import { cleanPatch, lastPlayedOf, lastPlayedPlan, likeOf, fresh, splitPath, SIGN_SECONDS } from './profiledata.js'
 
 const me = () => useStore.getState().user?.id
 const must = ({ data, error }) => { if (error) throw error; return data }
@@ -22,11 +22,28 @@ export async function saveProfile(patch) {
   return p
 }
 
-// Task 8/9 make these lists; for now the header shows the numbers.
-export async function getCounts(id) {
+export async function counts(id) {
   const n = (table, col) => supabase.from(table).select('*', { count: 'exact', head: true }).eq(col, id).then(r => { must(r); return r.count })
   const [playlists, followers, following] = await Promise.all([n('public_playlists', 'owner'), n('follows', 'followee'), n('follows', 'follower')])
   return { playlists, followers, following }
+}
+
+export const follow = id => supabase.from('follows').insert({ follower: me(), followee: id }).then(must)
+export const unfollow = id => supabase.from('follows').delete().eq('follower', me()).eq('followee', id).then(must)
+export async function isFollowing(id) {
+  return !!must(await supabase.from('follows').select('followee').eq('follower', me()).eq('followee', id).maybeSingle())
+}
+const LITE = 'id, name, avatar_path'
+async function people(col, other, id) {
+  const ids = must(await supabase.from('follows').select(other).eq(col, id).order('created_at', { ascending: false })).map(r => r[other])
+  if (!ids.length) return []
+  const rows = must(await supabase.from('profiles').select(LITE).in('id', ids))
+  return ids.map(i => rows.find(r => r.id === i)).filter(Boolean) // keep newest-first
+}
+export const followers = id => people('followee', 'follower', id)
+export const following = id => people('follower', 'followee', id)
+export async function searchPeople(q) {
+  return must(await supabase.from('profiles').select(LITE).ilike('name', likeOf(q)).neq('id', me()).limit(20))
 }
 
 const BUCKET = { avatar: 'avatars', background: 'backgrounds', cover: 'covers' }
@@ -63,11 +80,13 @@ export function useImageUrl(path) {
 let timer, last = null, turn = 0 // last: what was saved this session
 export async function setLastPlayed(track) {
   clearTimeout(timer)
-  timer = setTimeout(() => saveLastPlayed(track).catch(() => {}), 5000)
+  const uid = me()
+  timer = setTimeout(() => saveLastPlayed(track, uid).catch(() => {}), 5000)
 }
-async function saveLastPlayed(track) {
+async function saveLastPlayed(track, uid) {
   const s = useStore.getState()
-  const plan = lastPlayedPlan({ signedIn: !!(supabase && s.user), privateSession: s.privateSession, online: navigator.onLine, track, prev: last })
+  if (me() !== uid) return // signed out or switched account while waiting
+  const plan = lastPlayedPlan({ signedIn: !!(supabase && s.user), privateSession: s.privateSession, online: navigator.onLine, track, prev: last, uid })
   if (!plan) return
   const my = ++turn, src = s.localArt[track.id] || track.art
   let art = plan === 'reuse' ? last.art_path : null
@@ -76,6 +95,6 @@ async function saveLastPlayed(track) {
   if (my !== turn) return plan === 'upload' && removeImage(art) // a slow upload was overtaken by the next save
   const old = useStore.getState().profile?.last_played?.art_path
   await saveProfile({ last_played: lastPlayedOf(track, art) })
-  last = { id: track.id, artist: track.artist, album: track.album, art_path: art }
+  last = { uid, id: track.id, artist: track.artist, album: track.album, art_path: art }
   if (old !== art) removeImage(old)
 }

@@ -99,9 +99,6 @@ export const useStore = create(persist((set, get) => ({
   ].includes(k))),
 }))
 
-// Dev only: lets two-account testing open a profile from the console (People search arrives in Task 8).
-if (import.meta.env.DEV) window.__store = useStore
-
 export const route = () => { const s = useStore.getState(); return s.nav[s.navI] }
 export const useRoute = () => useStore(s => s.nav[s.navI])
 export const useArt = t => useStore(s => t && (t.art || s.localArt[t.id]))

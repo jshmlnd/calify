@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cleanPatch, lastPlayedOf, lastPlayedPlan, fresh, splitPath, HOUR, SIGN_SECONDS } from '../src/profiledata.js'
+import { cleanPatch, lastPlayedOf, lastPlayedPlan, likeOf, fresh, splitPath, HOUR, SIGN_SECONDS } from '../src/profiledata.js'
 import { accentVars, contrast, SURFACE } from '../src/theme.js'
 
 test('cleanPatch trims and enforces name 1–40 and bio ≤ 160', () => {
@@ -41,16 +41,23 @@ test('accentVars tints readably for the viewer theme', () => {
 })
 
 test('lastPlayedPlan skips, reuses the cover, or uploads', () => {
-  const t = { id: 't2', artist: 'A', album: 'B' }, prev = { id: 't1', artist: 'A', album: 'B', art_path: 'covers/u/c.webp' }
-  const ok = { signedIn: true, privateSession: false, online: true, track: t, prev }
+  const t = { id: 't2', artist: 'A', album: 'B' }, prev = { uid: 'u1', id: 't1', artist: 'A', album: 'B', art_path: 'covers/u/c.webp' }
+  const ok = { signedIn: true, privateSession: false, online: true, track: t, prev, uid: 'u1' }
   assert.equal(lastPlayedPlan(ok), 'reuse')
   assert.equal(lastPlayedPlan({ ...ok, signedIn: false }), null)
   assert.equal(lastPlayedPlan({ ...ok, privateSession: true }), null)
   assert.equal(lastPlayedPlan({ ...ok, online: false }), null)
   assert.equal(lastPlayedPlan({ ...ok, track: { ...t, id: 't1' } }), null)
+  assert.equal(lastPlayedPlan({ ...ok, uid: 'u2' }), 'upload') // other account never reuses u1's cover
+  assert.equal(lastPlayedPlan({ ...ok, uid: 'u2', track: { ...t, id: 't1' } }), 'upload')
   assert.equal(lastPlayedPlan({ ...ok, prev: null }), 'upload')
   assert.equal(lastPlayedPlan({ ...ok, track: { ...t, album: 'C' } }), 'upload')
   assert.equal(lastPlayedPlan({ ...ok, track: { ...t, artist: 'Z' } }), 'upload')
   assert.equal(lastPlayedPlan({ ...ok, prev: { ...prev, art_path: null } }), 'upload')
   assert.equal(lastPlayedPlan({ ...ok, track: { id: 't2', artist: 'A' }, prev: { ...prev, album: undefined } }), 'upload') // no album: can't tell
+})
+
+test('likeOf escapes wildcards', () => {
+  assert.equal(likeOf(' jo '), '%jo%')
+  assert.equal(likeOf('50%_a\\'), '%50\\%\\_a\\\\%')
 })
