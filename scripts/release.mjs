@@ -65,7 +65,7 @@ run('npx', ['vite', 'build'])
 // Uploads the installer, its blockmap and latest.yml (what electron-updater reads) to a draft release tagged v<version>.
 run('npx', ['electron-builder', '--win', 'nsis', '--publish', 'always'])
 run('npx', ['cap', 'sync', 'android'])
-run(win ? 'gradlew.bat' : './gradlew', ['assembleRelease'], join(root, 'android'))
+run(win ? '.\\gradlew.bat' : './gradlew', ['assembleRelease'], join(root, 'android'))
 console.log(`> copy ${apkOut} ${apk}`)
 if (!dry) copyFileSync(apkOut, apk)
 run('gh', ['release', 'upload', tag, apk, '--clobber', '-R', 'jshmlnd/calify'])
