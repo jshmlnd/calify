@@ -2,35 +2,59 @@ import { useState } from 'react'
 import { useStore, useRoute } from '../store'
 import { Icon } from '../icons'
 import { Art, TrackArt, routeOf } from '../ui'
-import { appMenu, cmd, pickLocalFiles } from '../commands'
-import * as sp from '../spotify'
+import { appMenu, cmd, pickLocalFiles, canUpdate, checkUpdates } from '../commands'
 import { playContext } from '../player'
+import { supabase, signInWithGoogle, signOut } from '../supabase'
+import { useImageUrl } from '../social'
 
-export function Avatar({ size = 32 }) {
-  const name = useStore(s => s.name)
-  const priv = useStore(s => s.privateSession)
+// Own avatar by default; `p` (a profiles row) shows someone's profile photo instead.
+export function Avatar({ size = 32, p }) {
+  const own = useStore(s => s.user && s.profile)
+  const myName = useStore(s => s.name)
+  const priv = useStore(s => !p && s.privateSession)
+  const google = useStore(s => s.user?.avatarUrl)
+  const signed = useImageUrl((p || own)?.avatar_path)
+  // Google's photo only stands in for the signed-in user's own picture.
+  const photo = signed || (!p || p.id === own?.id ? google : null)
+  const name = p ? p.name : myName
+  const [broken, setBroken] = useState(null)
   return (
     <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.4 }}>
+      {photo && broken !== photo ? <img src={photo} alt="" referrerPolicy="no-referrer" onError={() => setBroken(photo)} /> : <>
       {/* cat head drawn inside its own box so the ears never overflow and get cut */}
       <svg viewBox="0 0 40 40" aria-hidden="true">
         <path d="M6.5 18 L7.5 2.5 L18 10 Z" fill="var(--accent)" />
         <path d="M33.5 18 L32.5 2.5 L22 10 Z" fill="var(--ink)" stroke="var(--accent)" strokeWidth="1.6" strokeLinejoin="round" />
         <circle cx="20" cy="23" r="15.5" fill="var(--accent)" />
       </svg>
-      <b>{(name || 'Y')[0].toUpperCase()}</b>
+      <b>{(name || 'Y')[0].toUpperCase()}</b></>}
       {priv && <i className="avatar-dot" title="Private session" />}
     </span>
   )
 }
 
+const toastErr = e => useStore.getState().toastMsg(e.message)
+export const signInCmd = () => signInWithGoogle().catch(toastErr)
+export const signOutCmd = () => signOut().catch(toastErr)
+// Signed out: "Sign in with Google"; signed in: "Profile", "Sign out". Nothing when this build has no Supabase env.
+export const accountItems = () => {
+  const user = useStore.getState().user
+  if (!supabase) return []
+  return user ? [
+    { label: 'Profile', icon: 'user', onClick: () => useStore.getState().go({ name: 'profile', id: user.id }) },
+    { label: 'Sign out', icon: 'power', onClick: signOutCmd },
+  ] : [{ label: 'Sign in with Google', icon: 'user', onClick: signInCmd }]
+}
+
 export const avatarMenu = () => [
+  ...(supabase ? [...accountItems(), '-'] : []),
   { label: 'Settings', icon: 'sliders', onClick: cmd.prefs },
   { label: 'Import local files', icon: 'file', onClick: pickLocalFiles },
-  !useStore.getState().spotifyUser && { label: 'Log in with Spotify', icon: 'user', onClick: () => (sp.BUILT_IN_ID
-    ? sp.login().then(() => useStore.setState({ spotifyError: null }), e => { useStore.setState({ spotifyError: e.message }); cmd.prefs() })
-    : cmd.prefs()) },
   { label: 'Private session', icon: 'user', checked: useStore.getState().privateSession, onClick: cmd.privateSession },
   '-',
+  { label: "What's New", onClick: () => useStore.getState().go({ name: 'whatsnew' }) },
+  ...(supabase ? [{ label: 'Report a bug', onClick: cmd.bug }] : []),
+  ...(canUpdate() ? [{ label: 'Check for updates', onClick: () => checkUpdates() }] : []),
   { label: 'About Calify', onClick: cmd.about },
   ...(window.calify ? [{ label: 'Exit', onClick: cmd.exit }] : []),
 ].filter(Boolean)
@@ -53,7 +77,7 @@ export function TopBar() {
         <SearchBox />
       </div>
       <div className="tb-side tb-right">
-        <button className={`icon-btn nodrag ${panel === 'friends' ? 'on' : ''}`} aria-label="Friend Activity" title="Friend Activity" onClick={() => setPanel('friends')}><Icon name="friends" size={20} /></button>
+        <button className={`icon-btn nodrag ${panel === 'together' ? 'on' : ''}`} aria-label="Listen together" title="Listen together" onClick={() => setPanel('together')}><Icon name="friends" size={20} /></button>
         <button className="avatar-btn nodrag" aria-label="Account" title="Account" onClick={e => openMenu(e, avatarMenu())}><Avatar /></button>
       </div>
     </header>

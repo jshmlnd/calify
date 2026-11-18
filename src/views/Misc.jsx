@@ -1,16 +1,18 @@
+import { useState } from 'react'
 import { useStore, isDesktopApp } from '../store'
+import { submitBugReport } from '../social'
 import { useColor } from '../color'
 import { Icon } from '../icons'
 import { Spinner, useMobile } from '../ui'
 import { useLyrics, LyricsLines } from '../parts/Lyrics'
 import { LibraryList, createMenu } from '../parts/Library'
-import { Avatar } from '../parts/TopBar'
-import { pickLocalFiles, pickPlaylistCsv, cmd } from '../commands'
+import { Avatar, signInCmd, signOutCmd } from '../parts/TopBar'
+import { supabase } from '../supabase'
+import { pickLocalFiles, cmd, canUpdate, checkUpdates } from '../commands'
 import { removeLocal } from '../local'
 import { del } from 'idb-keyval'
 import { CaliCat } from '../parts/CaliCat'
-import { useState } from 'react'
-import * as sp from '../spotify'
+import { APP_VERSION, CHANGELOG } from '../changelog'
 
 export function LyricsView() {
   const current = useStore(s => s.current)
@@ -47,14 +49,26 @@ export function LibraryPage() {
   )
 }
 
+export function WhatsNew() {
+  return (
+    <div className="view scroll-y pad-view">
+      <div className="empty" style={{ paddingBottom: 0 }}><CaliCat size={96} state="awake" /></div>
+      <h1 className="section-title">What's New</h1>
+      {CHANGELOG.map(e => (
+        <section key={e.version}>
+          <h2>Calify {e.version} <span className="sub">{e.date}</span></h2>
+          {[['New', e.new], ['Fixed', e.fixed]].filter(([, l]) => l.length).map(([h, l]) => (
+            <div key={h}><h3 className="sub">{h}</h3><ul>{l.map(x => <li key={x}>{x}</li>)}</ul></div>
+          ))}
+        </section>
+      ))}
+      <div className="view-foot" />
+    </div>
+  )
+}
+
 export function Settings() {
-  const { name, local, zoom, privateSession, spotifyClientId, spotifyUser, spotifyError } = useStore()
-  const [busy, setBusy] = useState(false)
-  const connect = async () => {
-    setBusy(true)
-    set({ spotifyError: null })
-    try { await sp.login(); useStore.getState().toastMsg('Spotify connected') } catch (e) { set({ spotifyError: e.message }) } finally { setBusy(false) }
-  }
+  const { name, local, zoom, privateSession, user, go } = useStore()
   const set = useStore.setState
   const clearLocal = async () => {
     if (!confirm(`Remove all ${local.length} local files from Calify? The original files on your device are not touched.`)) return
@@ -65,30 +79,27 @@ export function Settings() {
   return (
     <div className="view scroll-y pad-view settings">
       <h1 className="section-title">Settings</h1>
+      {supabase && (
+        <section>
+          <h2>Account</h2>
+          {user ? (
+            <div className="set-row"><span>{user.name}<small>Signed in with Google as {user.email}</small></span>
+              <span className="set-btns">
+                <button className="outline-btn sm" onClick={() => go({ name: 'profile', id: user.id })}>Profile</button>
+                <button className="outline-btn sm" onClick={signOutCmd}>Sign out</button>
+              </span></div>
+          ) : (
+            <div className="set-row"><span>Sign in<small>Optional. Your music files never leave this device.</small></span>
+              <button className="outline-btn sm" onClick={signInCmd}>Sign in with Google</button></div>
+          )}
+        </section>
+      )}
       <section>
         <h2>Profile</h2>
         <label className="set-row"><span>Display name<small>Shown as the owner of your playlists.</small></span>
           <input value={name} maxLength={30} onChange={e => set({ name: e.target.value })} /></label>
         <div className="set-row"><span>Private session<small>Hide what you play from Recents and history.</small></span>
           <Toggle on={privateSession} onClick={cmd.privateSession} /></div>
-      </section>
-      <section>
-        <h2>Spotify</h2>
-        {spotifyError && !spotifyUser && <p className="set-error" role="alert">{spotifyError}</p>}
-        {spotifyUser ? (
-          <div className="set-row"><span>Connected as {spotifyUser.name}<small>Your Spotify playlists and Liked Songs are in Your Library. Full songs need Spotify Premium{sp.native ? ' and open in the Spotify app on this phone' : ''}.</small></span>
-            <button className="outline-btn sm" onClick={sp.logout}>Disconnect</button></div>
-        ) : sp.BUILT_IN_ID ? (
-          <div className="set-row"><span>Log in with Spotify<small>Sign in with your Spotify account on Spotify's own page. Calify never sees your password.</small></span>
-            <button className="spotify-btn" disabled={busy} onClick={connect}>{busy ? 'Waiting for Spotify…' : 'Log in with Spotify'}</button></div>
-        ) : <>
-          <label className="set-row"><span>Client ID<small>Create an app on the <a className="inline-link" onClick={e => { e.preventDefault(); sp.openLink('https://developer.spotify.com/dashboard') }}>Spotify developer dashboard</a> with Web API and Web Playback SDK enabled, and add the redirect URI http://127.0.0.1:43821/callback.</small></span>
-            <input value={spotifyClientId} onChange={e => set({ spotifyClientId: e.target.value })} placeholder="Paste your Client ID" spellCheck="false" autoComplete="off" /></label>
-          <div className="set-row"><span>Connect your account<small>Opens Spotify's sign-in page in your browser.</small></span>
-            <button className="outline-btn sm" disabled={!spotifyClientId.trim() || busy} onClick={connect}>{busy ? 'Waiting for Spotify…' : 'Connect'}</button></div>
-        </>}
-        <div className="set-row"><span>Import playlists from Spotify<small>Export a playlist as CSV with a tool like Exportify, then import it here. No Premium needed. Calify finds each song in your music files, and on Spotify once you're logged in.</small></span>
-          <button className="outline-btn sm" onClick={pickPlaylistCsv}>Import CSV</button></div>
       </section>
       <section>
         <h2>Local Files</h2>
@@ -109,7 +120,8 @@ export function Settings() {
       )}
       <section>
         <h2>About</h2>
-        <p className="sub">Calify 1.0.0. Plays your music files and your Spotify library. Synced lyrics by LRCLIB.</p>
+        <p className="sub">Calify {APP_VERSION}. Plays your music files. Synced lyrics by LRCLIB.</p>
+        {canUpdate() && <button className="outline-btn sm" onClick={() => checkUpdates()}>Check for updates</button>}
       </section>
       <div className="view-foot" />
     </div>
@@ -124,6 +136,24 @@ const KEYS = [
   ['Filter library', 'Ctrl + F'], ['New playlist', 'Ctrl + N'], ['Preferences', 'Ctrl + P'], ['Zoom', 'Ctrl + = / − / 0'],
 ]
 
+function BugDialog({ close }) {
+  const [what, setWhat] = useState(''), [expected, setExpected] = useState(''), [busy, setBusy] = useState(false), [err, setErr] = useState('')
+  const send = async e => {
+    e.preventDefault()
+    setBusy(true); setErr('')
+    try { await submitBugReport({ what, expected }); useStore.getState().toastMsg('Thanks! Your report was sent.'); close() }
+    catch (x) { setErr(x.message.startsWith('Please wait') ? x.message : 'Couldn’t send. Check your connection and try again.'); setBusy(false) }
+  }
+  return (
+    <form onSubmit={send} className="bug-form" style={{ display: 'contents' }}>
+      <label className="field"><span>What happened?</span><textarea autoFocus required minLength={10} maxLength={2000} value={what} onChange={e => setWhat(e.target.value)} /></label>
+      <label className="field"><span>What did you expect? (optional)</span><textarea maxLength={2000} value={expected} onChange={e => setExpected(e.target.value)} /></label>
+      {err && <p className="sub" role="alert">{err}</p>}
+      <button className="white-btn right" disabled={busy || what.trim().length < 10}>{busy ? 'Sending…' : 'Send'}</button>
+    </form>
+  )
+}
+
 export function DialogHost() {
   const dialog = useStore(s => s.dialog)
   if (!dialog) return null
@@ -131,14 +161,14 @@ export function DialogHost() {
   return (
     <div className="dialog-scrim" onPointerDown={e => e.target === e.currentTarget && close()}>
       <div className="dialog" role="dialog" aria-modal="true">
-        <header><h2>{dialog === 'keys' ? 'Keyboard shortcuts' : 'About Calify'}</h2><button className="icon-btn" aria-label="Close" onClick={close}><Icon name="close" /></button></header>
-        {dialog === 'keys' ? (
+        <header><h2>{dialog === 'keys' ? 'Keyboard shortcuts' : dialog === 'bug' ? 'Report a bug' : 'About Calify'}</h2><button className="icon-btn" aria-label="Close" onClick={close}><Icon name="close" /></button></header>
+        {dialog === 'bug' ? <BugDialog close={close} /> : dialog === 'keys' ? (
           <dl className="keys">{KEYS.map(([a, b]) => <div key={a}><dt>{a}</dt><dd><kbd>{b}</kbd></dd></div>)}</dl>
         ) : (
           <div className="about">
-            <p><b>Calify 1.0.0</b></p>
-            <p>Your music, your way. Play your own files and your Spotify library, and follow along with synced lyrics.</p>
-            <p className="sub">Spotify Web API and Web Playback SDK · Lyrics: LRCLIB · Built with React, Electron and Capacitor.</p>
+            <p><b>Calify {APP_VERSION}</b></p>
+            <p>Your music, your way. Play your own files and follow along with synced lyrics.</p>
+            <p className="sub">Lyrics: LRCLIB · Built with React, Electron and Capacitor.</p>
           </div>
         )}
       </div>

@@ -7,28 +7,18 @@ import { setShuffle, addToQueue } from '../player'
 import { itemMenu } from '../parts/Library'
 import { pickLocalFiles } from '../commands'
 import { CaliCat } from '../parts/CaliCat'
-import * as sp from '../spotify'
 
 function useCollection(kind, id) {
   const s = useStore()
-  const remote = useAsync(async () => {
-    if (kind === 'sliked') return { kind, id, name: 'Liked Songs', type: 'Spotify playlist', owner: useStore.getState().spotifyUser?.name, tracks: await sp.liked() }
-    if (kind === 'splaylist') {
-      const p = useStore.getState().spotifyPlaylists.find(x => x.id === id) || { name: 'Spotify playlist' }
-      return { ...p, sub: undefined, type: 'Spotify playlist', tracks: await sp.playlistTracks(id) }
-    }
-    return null
-  }, [kind, id])
-  const owner = { owner: s.name }
+  const owner = { owner: s.name }, uid = s.user?.id
   switch (kind) {
     case 'liked': return { kind, id, name: 'Liked Songs', type: 'Playlist', tracks: s.liked, ...owner }
     case 'local': return { kind, id, name: 'Local Files', type: 'Playlist', tracks: s.local, ...owner, description: 'Music files on this device' }
     case 'history': return { kind, id, name: 'Recently played', type: 'Playlist', tracks: s.history, ...owner }
     case 'playlist': {
       const p = s.playlists.find(x => x.id === id)
-      return p ? { kind, id, name: p.name, description: p.description, type: 'Playlist', tracks: p.tracks, editable: true, ...owner } : { missing: true }
+      return p ? { kind, id, name: p.name, description: p.description, type: uid && p.public === uid ? 'Public playlist' : 'Playlist', public: !!uid && p.public === uid, tracks: p.tracks, editable: true, ...owner } : { missing: true }
     }
-    case 'sliked': case 'splaylist': return remote.data ? { kind, ...remote.data, id } : { loading: remote.loading, error: remote.error }
     default: return { missing: true }
   }
 }
@@ -40,6 +30,7 @@ export function Collection({ kind, id }) {
   const [find, setFind] = useState(false)
   const { openMenu, shuffle, updatePlaylist, deletePlaylist } = useStore()
   const mobile = useMobile()
+  const signedIn = useStore(s => !!s.user)
   const cover = c.art || c.tracks?.find(t => t.art)?.art
   const color = useColor(kind === 'liked' ? null : cover, kind === 'liked' ? 'liked' : c.name, 0.34, 0.6)
   const bg = kind === 'liked' ? 'hsl(24 62% 36%)' : kind === 'local' ? 'hsl(24 22% 18%)' : color
@@ -50,9 +41,10 @@ export function Collection({ kind, id }) {
   const menu = e => openMenu(e, [
     { label: 'Add to queue', icon: 'queue', onClick: () => addToQueue(c.tracks) },
     c.editable && { label: 'Edit details', icon: 'edit', onClick: () => setEdit(true) },
+    c.editable && signedIn && { label: c.public ? 'Make private' : 'Make public', onClick: () => updatePlaylist(id, { public: c.public ? false : useStore.getState().user.id }) },
     c.editable && { label: 'Delete', icon: 'trash', onClick: () => confirm(`Delete "${c.name}"? This can't be undone.`) && deletePlaylist(id) },
     kind === 'local' && { label: 'Import more files', icon: 'file', onClick: pickLocalFiles },
-    ...(['liked', 'playlist', 'local', 'sliked', 'splaylist'].includes(kind) ? itemMenu(item).slice(1) : []),
+    ...(['liked', 'playlist', 'local'].includes(kind) ? itemMenu(item).slice(1) : []),
   ].filter(Boolean))
   return (
     <div className="view scroll-y coll" style={{ '--c': bg }} onScroll={e => setScrolled(e.currentTarget.scrollTop > (mobile ? 240 : 300))}>
@@ -105,8 +97,7 @@ function FindSongs({ pid, onClose }) {
   const { addToPlaylist, local } = useStore()
   const res = useAsync(async () => {
     if (!query) return []
-    const mine = local.filter(t => `${t.title} ${t.artist}`.toLowerCase().includes(query.toLowerCase()))
-    return [...mine, ...(sp.connected() ? await sp.search(query).catch(() => []) : [])]
+    return local.filter(t => `${t.title} ${t.artist}`.toLowerCase().includes(query.toLowerCase()))
   }, [query])
   return (
     <section className="find">

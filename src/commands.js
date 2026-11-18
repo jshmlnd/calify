@@ -1,8 +1,10 @@
 import { useStore, isDesktopApp } from './store'
-import { toggle, next, prev, seekBy, setShuffle, cycleRepeat, setVolume } from './player'
-import { importFiles } from './local'
-import * as sp from './spotify'
-import { readPlaylistCsv, bestMatch, norm } from './csv'
+import { toggle, next, prev, seekBy, setShuffle, cycleRepeat, setVolume, pause } from './player'
+import { importFiles, removeLocal } from './local'
+import { dropTracks } from './prune'
+import { supabase } from './supabase'
+import { Capacitor } from '@capacitor/core'
+import { checkForUpdate, installUpdate } from './updates'
 
 const S = () => useStore.getState()
 
@@ -21,32 +23,21 @@ export function pickLocalFiles() {
   input.click()
 }
 
-// Spotify playlist export (CSV) → Calify playlist, matching each song in your music files, then on Spotify (when logged in).
-export function pickPlaylistCsv() {
-  const input = Object.assign(document.createElement('input'), { type: 'file', multiple: true, accept: '.csv,text/csv' })
-  input.onchange = async () => { for (const f of input.files) await importPlaylistCsv(f) }
-  input.click()
-}
-
-async function importPlaylistCsv(file) {
-  const rows = readPlaylistCsv(await file.text())
-  if (!rows?.length) return S().toastMsg(`${file.name} doesn't look like a playlist export`)
-  const name = file.name.replace(/\.csv$/i, '').replace(/_+/g, ' ').trim() || 'Imported playlist'
-  const found = new Array(rows.length).fill(null)
-  let done = 0
-  const find = async r => bestMatch(r, S().local) ||
-    (sp.connected() ? bestMatch(r, await sp.search(`${norm(r.title)} ${norm(r.artist.split(/[,;]/)[0])}`).catch(() => [])) : null)
-  // 4 lookups at a time: quick without tripping Spotify's rate limit.
-  await Promise.all([0, 1, 2, 3].map(async w => {
-    for (let i = w; i < rows.length; i += 4) {
-      found[i] = await find(rows[i])
-      S().toastMsg(`Matching "${name}": ${++done} of ${rows.length}`)
-    }
-  }))
-  const tracks = [...new Map(found.filter(Boolean).map(t => [t.id, t])).values()]
-  const hits = found.filter(Boolean).length
-  S().createPlaylist(tracks, { name, description: `Imported from Spotify: found ${hits} of ${rows.length} songs in your files${sp.connected() ? ' and on Spotify' : ''}.` })
-  S().toastMsg(hits === rows.length ? `Imported "${name}"` : `Imported "${name}": ${rows.length - hits} of ${rows.length} songs weren't available`)
+export async function removeLocalTrack(id) {
+  const t = S().local.find(x => x.id === id)
+  if (!t || !confirm(`Remove "${t.title}" from Calify? The original file on your device is not touched.`)) return
+  try {
+    const rest = await removeLocal(id)
+    if (S().current?.id === id) pause()
+    const art = S().localArt[id]
+    if (art) URL.revokeObjectURL(art)
+    useStore.setState(s => {
+      const localArt = { ...s.localArt }
+      delete localArt[id]
+      return { ...dropTracks(s, x => x.id === id, new Set()), local: rest, localArt }
+    })
+  } catch (e) { return S().toastMsg("Couldn't remove: " + e.message) }
+  S().toastMsg('Removed from Calify')
 }
 
 const zoom = f => {
@@ -65,6 +56,35 @@ export const cmd = {
   volume: d => setVolume(S().volume + d),
   zoomIn: () => zoom(0.1), zoomOut: () => zoom(-0.1), zoomReset: () => zoom(1),
   about: () => useStore.setState({ dialog: 'about' }),
+  bug: () => useStore.setState({ dialog: 'bug' }),
+}
+
+// "Check for updates". quiet = the startup check: it says nothing unless there is an update to offer.
+// Resolves false when the check itself failed (offline, rate limit, server error).
+export const canUpdate = () => !!window.calify?.updates || Capacitor.getPlatform() === 'android'
+export async function checkUpdates(quiet) {
+  const say = m => quiet || S().toastMsg(m)
+  const desk = window.calify?.updates
+  if (desk) {
+    const r = await desk.check()
+    if (r === 'none') say("You're up to date")
+    else if (r === 'downloading') say('Downloading update…')
+    else if (r === 'error') say("Couldn't check for updates. Try again later.")
+    return r !== 'error'   // 'ready': the update bar (onReady) already says so
+  }
+  try {
+    const info = await checkForUpdate()
+    if (!info) say("You're up to date")
+    else if (quiet) useStore.setState({ update: info })   // the update bar offers it; never download unasked
+    else await installAndroid(info)
+    return true
+  } catch { say("Couldn't check for updates. Try again later."); return false }
+}
+// Android: download the APK, then Android shows its install prompt.
+export function installAndroid(info) {
+  useStore.setState({ update: null })
+  S().toastMsg('Downloading update…')
+  return installUpdate(info).catch(() => S().toastMsg("Couldn't download the update. Try again later."))
 }
 
 const edit = c => () => {
@@ -76,7 +96,6 @@ export const appMenu = () => [
   { label: 'File', sub: [
     { label: 'New Playlist', shortcut: 'Ctrl+N', onClick: cmd.newPlaylist },
     { label: 'Import Local Files…', onClick: pickLocalFiles },
-    { label: 'Import Spotify Playlist (CSV)…', onClick: pickPlaylistCsv },
     '-',
     { label: 'Private Session', checked: S().privateSession, onClick: cmd.privateSession },
     ...(isDesktopApp ? ['-', { label: 'Exit', shortcut: 'Ctrl+Shift+Q', onClick: cmd.exit }] : []),
@@ -118,6 +137,7 @@ export const appMenu = () => [
   ] },
   { label: 'Help', sub: [
     { label: 'Keyboard Shortcuts', onClick: () => useStore.setState({ dialog: 'keys' }) },
+    ...(supabase ? [{ label: 'Report a bug', onClick: cmd.bug }] : []),
     '-',
     { label: 'About Calify', onClick: cmd.about },
   ] },

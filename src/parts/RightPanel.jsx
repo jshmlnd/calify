@@ -6,16 +6,20 @@ import { useColor } from '../color'
 import { audio, playAtPos, playFromQueue } from '../player'
 import { useLyrics, LyricsLines } from './Lyrics'
 import { CaliCat } from './CaliCat'
+import { TogetherPanel } from './Together'
 
 export function RightPanel() {
   const panel = useStore(s => s.panel)
+  const inSession = useStore(s => !!s.together)
   if (!panel) return null
+  // While in a session, its panel stands in for the queue.
+  const together = panel === 'together' || (panel === 'queue' && inSession)
   return (
     <aside className="panel right" aria-label="Side panel">
       {panel === 'np' && <NowPlaying />}
-      {panel === 'queue' && <Queue />}
+      {panel === 'queue' && !together && <Queue />}
       {panel === 'devices' && <Devices />}
-      {panel === 'friends' && <Friends />}
+      {together && <TogetherPanel onClose={() => useStore.setState({ panel: null })} />}
     </aside>
   )
 }
@@ -69,7 +73,7 @@ function QRow({ t, current, onClick }) {
   return (
     <div className={`q-row ${current ? 'current' : ''}`} onClick={onClick} onContextMenu={e => useStore.getState().openMenu(e, trackMenu(t))}>
       <div className="q-art"><TrackArt track={t} />{current && playing && <span className="q-eq"><Eq /></span>}</div>
-      <div className="q-text"><b>{t.title}</b><small>{t.artist}</small></div>
+      <div className="q-text"><b>{t.title}</b><small>{t.artist}{t.addedBy && ` · Added by ${t.addedBy}`}</small></div>
     </div>
   )
 }
@@ -129,23 +133,6 @@ function Devices() {
         <div className="dev-tip"><Icon name="devices" size={24} /><div><b>Play from another device</b><small>It will automatically appear here.</small></div></div>
         <div className="dev-tip"><Icon name="power" size={24} /><div><b>Restart your speaker</b><small>Or follow setup instructions if it's a new device.</small></div></div>
       </>}
-    </div>
-  )
-}
-
-function Friends() {
-  return (
-    <div className="rp-scroll friends">
-      <header className="rp-head"><h3>Listening activity</h3><Close /></header>
-      <p>Let friends and followers on Calify see what you're listening to.</p>
-      {[0, 1, 2].map(i => (
-        <div key={i} className="friend-ph">
-          <span className="fp-av"><Icon name="user" size={22} /><i /></span>
-          <span className="fp-lines"><i /><i /><i /></span>
-        </div>
-      ))}
-      <p>Friend activity is coming to Calify soon. Until then, your listening stays on this device.</p>
-      <button className="white-btn" onClick={() => useStore.getState().go({ name: 'settings' })}>Settings</button>
     </div>
   )
 }

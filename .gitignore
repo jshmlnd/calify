@@ -4,3 +4,5 @@ release
 android/app/build
 android/.gradle
 .env
+supabase/.temp
+site/.wrangler

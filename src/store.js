@@ -1,15 +1,17 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { dropAudius } from './migrate'
+import { dropAudius, dropSpotify } from './migrate'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 const dedupe = (item, list, max) => [item, ...list.filter(x => !(x.kind === item.kind && x.id === item.id))].slice(0, max)
 
 let toastTimer
+const HOST_ONLY = "This song is on the host's device, so it can't be saved here"
 export const useStore = create(persist((set, get) => ({
   // ---- library
   name: 'You',
+  lastSeenVersion: null,
   playlists: [],        // { id, name, description, tracks: [], createdAt }
   liked: [],            // tracks, newest first
   pinned: ['liked'],
@@ -17,7 +19,10 @@ export const useStore = create(persist((set, get) => ({
   recentSearches: [],   // collection items or { kind: 'track', track }
   history: [],          // recently played tracks
   local: [], localArt: {}, // loaded from IndexedDB at boot (not persisted)
-  spotifyClientId: '', spotifyUser: null, spotifyPlaylists: [], // tokens live in spotify.js, not here
+
+  // ---- account (src/supabase.js; persisted so theme/profile show before the network)
+  user: null,           // { id, email, name, avatarUrl }
+  profile: null,        // profiles row
 
   // ---- player
   current: null, playing: false,
@@ -26,10 +31,13 @@ export const useStore = create(persist((set, get) => ({
 
   // ---- ui
   nav: [{ name: 'home' }], navI: 0,
-  panel: null,            // 'np' | 'queue' | 'devices' | 'friends'
+  panel: null,            // 'np' | 'queue' | 'devices' | 'together'
   libCollapsed: false, libWidth: 340, libSort: 'recents', libFilter: null,
   privateSession: false, mini: false, fullscreen: false, npOpen: false, zoom: 1,
   toast: null, menu: null, dialog: null,
+  together: null,         // Listen together session (src/together/session.js); never persisted
+  invite: null,           // { code, from, name }: a Listen together invite waiting for Join / Not now
+  update: null,           // { version, apkUrl? }: an update ready to install (desktop) or to download (Android)
 
   go: route => set(s => {
     if (same(s.nav[s.navI], route)) return { npOpen: false }
@@ -54,11 +62,13 @@ export const useStore = create(persist((set, get) => ({
   },
 
   toggleLike: t => {
+    if (t.fromHost) return get().toastMsg(HOST_ONLY)
     const has = get().liked.some(x => x.id === t.id)
     set(s => ({ liked: has ? s.liked.filter(x => x.id !== t.id) : [{ ...t, addedAt: Date.now() }, ...s.liked] }))
     get().toastMsg(has ? 'Removed from Liked Songs' : 'Added to Liked Songs')
   },
   createPlaylist: (tracks = [], meta = {}) => {
+    if (tracks.some(t => t.fromHost)) return get().toastMsg(HOST_ONLY)
     const id = uid()
     const n = get().playlists.length + 1
     set(s => ({ playlists: [{ id, name: meta.name || `My Playlist #${n}`, description: meta.description || '', tracks: tracks.map(t => ({ ...t, addedAt: Date.now() })), createdAt: Date.now() }, ...s.playlists] }))
@@ -67,11 +77,14 @@ export const useStore = create(persist((set, get) => ({
   },
   updatePlaylist: (id, patch) => set(s => ({ playlists: s.playlists.map(p => p.id === id ? { ...p, ...patch } : p) })),
   deletePlaylist: id => {
+    const p = get().playlists.find(x => x.id === id)
+    if (p?.public && p.public !== get().user?.id) return get().toastMsg('Sign in to delete a public playlist, or make it private first')
     set(s => ({ playlists: s.playlists.filter(p => p.id !== id), recents: s.recents.filter(r => r.id !== id) }))
     get().go({ name: 'home' })
     get().toastMsg('Removed from Your Library')
   },
   addToPlaylist: (id, tracks) => {
+    if (tracks.some(t => t.fromHost)) return get().toastMsg(HOST_ONLY)
     const p = get().playlists.find(x => x.id === id)
     const fresh = tracks.filter(t => !p.tracks.some(x => x.id === t.id))
     get().updatePlaylist(id, { tracks: [...p.tracks, ...fresh.map(t => ({ ...t, addedAt: Date.now() }))] })
@@ -87,10 +100,12 @@ export const useStore = create(persist((set, get) => ({
   pushHistory: t => !get().privateSession && set(s => ({ history: [t, ...s.history.filter(x => x.id !== t.id)].slice(0, 50) })),
 }), {
   name: 'calify',
-  version: 2,
-  migrate: (state, version) => (version < 2 ? dropAudius(state) : state),
-  partialize: s => Object.fromEntries(Object.entries(s).filter(([k, v]) => typeof v !== 'function' && ![
-    'local', 'localArt', 'playing', 'panel', 'nav', 'navI', 'toast', 'menu', 'dialog', 'mini', 'fullscreen', 'npOpen', 'spotifyError',
+  version: 3,
+  // 1.0 Spotify users: also delete the leftover login token
+  migrate: (s, v) => { if (v < 2) s = dropAudius(s); if (v < 3) { s = dropSpotify(s); try { localStorage.removeItem('calify.spotify') } catch {} } return s },
+  // A Listen together listener's `current` mirrors the host's song (metadata only): persist their own track instead.
+  partialize: s => Object.fromEntries(Object.entries({ ...s, current: s.together?.role === 'listener' ? s.together.saved : s.current }).filter(([k, v]) => typeof v !== 'function' && ![
+    'local', 'localArt', 'playing', 'panel', 'nav', 'navI', 'toast', 'menu', 'dialog', 'mini', 'fullscreen', 'npOpen', 'together', 'invite', 'update',
   ].includes(k))),
 }))
 

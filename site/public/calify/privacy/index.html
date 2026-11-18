@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calify privacy</title>
+<style>
+  :root { --bg: #0f0b08; --panel: #1a1410; --text: #fbf3e6; --sub: #c9b8a3; --accent: #f08a3c; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 'Segoe UI', system-ui, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 48px 16px 64px; }
+  h1 { font-size: 36px; letter-spacing: -.02em; margin: 0 0 4px; }
+  h2 { font-size: 20px; margin: 32px 0 8px; color: var(--accent); }
+  p, li { color: var(--sub); }
+  strong { color: var(--text); }
+  a { color: var(--accent); }
+  section { background: var(--panel); border-radius: 8px; padding: 4px 20px 12px; margin-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Calify privacy</h1>
+  <p>Calify is a music player for your own files. Signing in is optional; without it nothing about you leaves your device.</p>
+
+  <section>
+    <h2>Your music stays on your device</h2>
+    <p><strong>Music files are never uploaded.</strong> Your library, playlists, likes and listening history are stored on your device only.</p>
+  </section>
+
+  <section>
+    <h2>What we store when you sign in with Google</h2>
+    <ul>
+      <li><strong>Google account:</strong> your name, email address, Google account ID and Google profile photo link, used to sign you in.</li>
+      <li><strong>Profile:</strong> display name, bio, theme and accent colour, a profile photo and background image if you add them, and the title and artist of the song you last played (with its album art, resized small).</li>
+      <li><strong>Follows:</strong> who you follow and who follows you.</li>
+      <li><strong>Public playlists:</strong> only playlists you make public: their name, cover image and the title, artist, album and length of each song. Never the audio.</li>
+      <li><strong>Listen together:</strong> the session code and who hosted it. Audio and chat travel over live connections between listeners and are not stored.</li>
+    </ul>
+    <p>Profiles, follows and public playlists can be seen by other signed-in Calify users. Nothing is visible to people who are not signed in.</p>
+  </section>
+
+  <section>
+    <h2>Bug reports</h2>
+    <p>If you send one, we store what you wrote, the app version and platform (Windows, Android or web), and your user ID if you were signed in. Only the developer can read them.</p>
+  </section>
+
+  <section>
+    <h2>Where it lives</h2>
+    <p>Account data is stored with <a href="https://supabase.com/privacy">Supabase</a>. We don't sell it, use it for ads or share it with anyone else.</p>
+    <p>Listen together audio goes directly between devices when it can. When a direct connection isn't possible, it passes through <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a>'s relay on its way to listeners; it is not stored there.</p>
+  </section>
+
+  <section>
+    <h2>Contact and deleting your data</h2>
+    <p>To ask a question or have your account and everything above deleted, <a href="https://github.com/jshmlnd/calify/issues">open an issue on GitHub</a>.</p>
+  </section>
+</main>
+</body>
+</html>

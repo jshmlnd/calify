@@ -1,25 +1,25 @@
 # Calify
 
-A Spotify-style music player for Windows and Android.
+A music player for Windows and Android.
 
-- **Spotify:** log in to see your Spotify playlists and Liked Songs and search Spotify (full songs need Premium; see below). No Premium? Import a playlist's CSV export and Calify matches its songs to your files.
-- **Your own music:** import MP3 / M4A / FLAC / WAV / OGG files (tags and cover art are read; a matching `.lrc` file gives synced lyrics).
+- **Your own music:** import MP3 / M4A / FLAC / WAV / OGG files (tags and cover art are read; a matching `.lrc` file gives synced lyrics). Remove a single imported file with **Remove from Calify**.
 - **Lyrics:** synced lyrics from [LRCLIB](https://lrclib.net).
-- **Player:** queue with "Next in queue", shuffle, repeat / repeat one, Liked Songs, your own playlists, Now Playing view, full-screen player, miniplayer (Windows), output-device picker, OS media controls (Windows media keys, Android lock-screen notification).
+- **Player:** queue with "Next in queue", shuffle, repeat / repeat one, Liked Songs, your own playlists, Now Playing view, full-screen player, miniplayer (Windows), output-device picker, OS media controls.
+- **Accounts (optional):** sign in with Google to get a profile (photo, bio, background, accent colour, theme, public playlists, last played), following, People search and Listen together. Local playback works signed out and offline.
+- **Listen together:** 2-5 people hear the host's playback live. Start a session to get a `CALI-0000` code and a join link (`calify.zjkm.tech/calify/join`); the host approves every joiner. Listeners can chat and add songs to the host's queue. It keeps running in the background on Android.
+- **What's New** and **Report a bug** live in the account menu.
+- **Updates:** "Check for updates" in the account menu (Windows also checks quietly on startup). Windows installs on restart; Android downloads the APK and opens the system install prompt.
 
 ## Install
 
-| Platform | File |
-|---|---|
-| Windows | `release/Calify Setup 1.0.0.exe` |
-| Android | `release/Calify-1.0.0.apk` (copy to the phone, allow "Install unknown apps") |
+Download from the [latest release](https://github.com/jshmlnd/calify/releases/latest): `Calify-Setup-<version>.exe` for Windows, the `.apk` for Android (allow "Install unknown apps" once).
 
 ## Develop
 
 ```bash
 npm install
 npm run dev          # browser at http://localhost:5173
-npm test             # lyrics parser tests
+npm test             # unit tests
 npm run desktop      # run the Electron app from source
 npm run dist:win     # build the Windows installer into release/
 npm run android:apk  # build the debug APK (needs Android SDK + JDK 21)
@@ -27,37 +27,25 @@ npm run android:apk  # build the debug APK (needs Android SDK + JDK 21)
 
 The APK lands in `android/app/build/outputs/apk/debug/app-debug.apk`.
 
-## Spotify (optional)
+## Setup
 
-Calify can sign in to Spotify, show your Spotify playlists and Liked Songs in Your Library, and search Spotify. Full songs need **Spotify Premium**.
-
-1. Go to the [Spotify developer dashboard](https://developer.spotify.com/dashboard) and create an app. Tick **Web API** and **Web Playback SDK**. Add the redirect URI `http://127.0.0.1:43821/callback` (the dashboard needs a port; Calify listens on 43821 during sign-in). For browser dev also add `http://127.0.0.1:5173/` and open the dev server at that address, not `localhost`.
-2. Put the app's **Client ID** in a `.env` file (see `.env.example`): `VITE_SPOTIFY_CLIENT_ID=...`, then rebuild. A PKCE Client ID isn't a secret, so it ships inside Calify. People then just press **Log in with Spotify** and sign in on Spotify's own page with their normal account; they never see a key. Builds without one show a Client ID field in Settings instead.
-3. Development-mode apps allow 5 users. Add each person's Spotify email under the app's **User Management**.
-
-Spotify's 2026 dev-mode rules: playlist tracks load only for playlists you own or collaborate on, and search returns at most 10 songs.
-
-**Where Spotify songs play**
-
-| | |
-|---|---|
-| Browser (`npm run dev`) | In Calify, through the Web Playback SDK |
-| Windows app | In Calify, once it runs on castLabs' Widevine Electron (below). Until then it says it can't decode Spotify audio. |
-| Android app | Opens the song in the Spotify app/site (the SDK isn't supported inside apps) |
-
-**Windows: Widevine Electron**
-
-Calify runs on castLabs' Electron (`45.2.1+wvcus`), which includes Widevine. Spotify's licence server also wants the app VMP-signed with castLabs' free EVS service. `npm run dist:win` does that automatically (`build/evs-sign.cjs`, after code-signing) once you have an EVS account:
-
-```bash
-python -m pip install --upgrade castlabs-evs
-python -m castlabs_evs.account signup
-npm run dist:win
-```
-
-Without an account the build still works and prints "EVS signing skipped". Spotify songs won't play until it's signed. EVS logins expire about monthly: run `python -m castlabs_evs.account reauth`. To test from source, sign the dev binary once with `python -m castlabs_evs.vmp sign-pkg node_modules/electron/dist`, then run `npm run desktop`.
-
-npm 12 blocks URL dependencies by default, so reinstalling needs `npm install --allow-remote=root`.
+1. **`.env`**: copy `.env.example` to `.env` and fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` from the Supabase dashboard. Never commit `.env`.
+2. **Supabase**: enable the Google provider (Authentication, Providers), then:
+   ```bash
+   npx supabase link --project-ref <project-ref>
+   npx supabase db push                          # migrations in supabase/migrations
+   npx supabase secrets set CF_TURN_KEY_ID=... CF_TURN_API_TOKEN=...
+   npx supabase functions deploy turn-credentials
+   ```
+   Bug reports land in the Supabase dashboard.
+3. **Site** (join link and privacy pages): `cd site && npx wrangler deploy` (served at calify.zjkm.tech).
+4. **Release**: needs `gh` logged in as the repo owner and JAVA_HOME set to JDK 21.
+   ```bash
+   npm run release -- --dry-run   # build and check, publish nothing
+   npm run release                # build the installer and APK, publish a GitHub release
+   ```
+   Bump the version in `package.json` and Android `versionCode`/`versionName` first, and add a `src/changelog.js` entry.
+5. **Back up `C:\Users\Administrator.JOSHUAA\.android\debug.keystore`.** Android only installs an update signed with the same key, so losing it means users must uninstall and reinstall.
 
 ## Keyboard shortcuts (desktop)
 

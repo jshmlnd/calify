@@ -33,6 +33,7 @@ export function MobileNowPlaying() {
       <Controls big />
       <div className="m-np-tools">
         <button className="icon-btn" aria-label="Connect to a device" onClick={() => { close(); setPanel('devices') }}><Icon name="devices" size={20} /></button>
+        <button className="icon-btn" aria-label="Listen together" onClick={() => { close(); setPanel('together') }}><Icon name="friends" size={20} /></button>
         <button className="icon-btn" aria-label="Queue" onClick={() => { close(); setPanel('queue') }}><Icon name="queue" size={20} /></button>
       </div>
       {lyrics.status === 'ok' && (
@@ -110,6 +111,7 @@ export function FullScreen() {
   const art = useStore(s => current && (current.art || s.localArt[current.id]))
   const ctx = useStore(s => s.ctx)
   const lyrics = useLyrics(current)
+  const color = useColor(art, current?.title, 0.22, 0.5)
   const exit = () => { useStore.setState({ fullscreen: false }); document.fullscreenElement && document.exitFullscreen() }
   useEffect(() => {
     const f = () => !document.fullscreenElement && useStore.setState({ fullscreen: false })
@@ -117,7 +119,7 @@ export function FullScreen() {
     return () => document.removeEventListener('fullscreenchange', f)
   }, [])
   return (
-    <div className="fs" style={{ '--art': art ? `url(${art})` : 'none' }}>
+    <div className="fs" style={{ '--art': art ? `url(${art})` : 'none', '--fs-c': color }}>
       <div className="fs-bg" />
       <header className="fs-head"><small>PLAYING FROM {ctx ? 'PLAYLIST' : 'CALIFY'}</small><b>{ctx?.name}</b></header>
       {lyrics.status === 'ok' && lyrics.data.synced && <div className="fs-lyrics scroll-y"><LyricsLines lyrics={lyrics.data} className="big" /></div>}

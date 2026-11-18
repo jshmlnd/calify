@@ -1,24 +1,20 @@
 import { useState } from 'react'
 import { useStore } from '../store'
-import { Art, BigPlay, Card, Eq, Shelf, routeOf, useAsync, useMobile } from '../ui'
+import { Art, BigPlay, Card, Eq, Shelf, routeOf, useMobile } from '../ui'
 import { useColor } from '../color'
 import { playContext } from '../player'
 import { Avatar } from '../parts/TopBar'
 import { Icon } from '../icons'
-import { pickLocalFiles, pickPlaylistCsv } from '../commands'
-import * as sp from '../spotify'
+import { pickLocalFiles } from '../commands'
 
 const trackCard = t => ({ kind: 'track', id: t.id, track: t, name: t.title, sub: t.artist, art: t.art })
 
-// Every shelf on Home; reused by "Show all" pages. Built only from your library: local files, Calify playlists and Spotify.
+// Every shelf on Home; reused by "Show all" pages. Built only from your library: local files and Calify playlists.
 export function useShelves() {
-  const { recents, history, local, liked, spotifyUser, spotifyPlaylists } = useStore()
-  const sLiked = useAsync(() => (spotifyUser ? sp.liked() : Promise.resolve([])), [spotifyUser?.id])
+  const { recents, history, local, liked } = useStore()
   const tracksShelf = (list, ctx) => ({ items: (list || []).map(trackCard), play: i => playContext(list, i, { ...ctx, art: list.find(t => t.art)?.art }) })
   return {
     recents: { title: 'Jump back in', type: 'playlists', items: recents.slice(0, 20) },
-    spotify: { title: 'Your Spotify playlists', type: 'playlists', items: spotifyPlaylists },
-    sliked: { title: 'From your Spotify Liked Songs', type: 'music', ...tracksShelf(sLiked.data?.slice(0, 30), { kind: 'sliked', id: 'sliked', name: 'Liked Songs' }) },
     history: { title: 'Recently played', type: 'music', ...tracksShelf(history, { kind: 'history', id: 'history', name: 'Recently played' }) },
     local: { title: 'Your local files', type: 'music', ...tracksShelf(local, { kind: 'local', id: 'local', name: 'Local Files' }) },
     liked: { title: 'From your Liked Songs', type: 'music', ...tracksShelf(liked, { kind: 'liked', id: 'liked', name: 'Liked Songs' }) },
@@ -56,18 +52,19 @@ export function Home() {
   const recents = useStore(s => s.recents)
   const mobile = useMobile()
   const sh = useShelves()
-  const shortcuts = [{ kind: 'liked', id: 'liked', name: 'Liked Songs' }, ...recents.filter(r => r.kind !== 'liked'), ...sh.spotify.items]
+  const shortcuts = [{ kind: 'liked', id: 'liked', name: 'Liked Songs' }, ...recents.filter(r => r.kind !== 'liked')]
     .filter((it, i, all) => all.findIndex(x => x.kind === it.kind && x.id === it.id) === i).slice(0, 8)
   const first = hover || shortcuts.find(s => s.art)
   const color = useColor(first?.art, first?.name || 'calify', 0.3, 0.5)
   const show = key => (filter === 'all' || sh[key].type === filter) && sh[key].items.length > 0
-  const order = ['recents', 'spotify', 'sliked', 'local', 'history', 'liked']
+  const order = ['recents', 'local', 'history', 'liked']
   const empty = !order.some(k => sh[k].items.length)
   return (
     <div className="view scroll-y home" style={{ '--c': color }}>
       <div className="home-bg" />
       <div className="chips home-chips">
         {mobile && <button className="chip-av" onClick={() => go({ name: 'settings' })} aria-label="Settings"><Avatar /></button>}
+        {mobile && <button className="chip x" onClick={() => useStore.setState({ panel: 'together' })} aria-label="Listen together"><Icon name="friends" size={16} /></button>}
         {[['all', 'All'], ['music', 'Music'], ['playlists', 'Playlists']].map(([k, l]) => (
           <button key={k} className={`chip ${filter === k ? 'on' : ''}`} onClick={() => setFilter(k)}>{l}</button>
         ))}
@@ -85,18 +82,14 @@ export function Home() {
   )
 }
 
-// First run: nothing in the library yet, so point at the three ways music gets in.
+// First run: nothing in the library yet, so point at how music gets in.
 function Welcome() {
-  const spotifyUser = useStore(s => s.spotifyUser)
-  const login = () => sp.login().catch(e => { useStore.setState({ spotifyError: e.message }); useStore.getState().go({ name: 'settings' }) })
   return (
     <section className="welcome">
       <h2>Let's fill up your library</h2>
-      <p>Calify plays your own music files and your Spotify library.</p>
+      <p>Calify plays your own music files.</p>
       <div className="welcome-actions">
         <button className="welcome-card" onClick={pickLocalFiles}><Icon name="file" size={28} /><b>Import music files</b><small>MP3, M4A, FLAC, WAV or OGG from this device</small></button>
-        {!spotifyUser && <button className="welcome-card" onClick={sp.BUILT_IN_ID ? login : () => useStore.getState().go({ name: 'settings' })}><Icon name="user" size={28} /><b>Log in with Spotify</b><small>Your playlists and Liked Songs (Premium)</small></button>}
-        <button className="welcome-card" onClick={pickPlaylistCsv}><Icon name="list" size={28} /><b>Import a Spotify playlist</b><small>From a CSV export, no Premium needed</small></button>
       </div>
     </section>
   )
