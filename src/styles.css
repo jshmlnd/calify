@@ -737,3 +737,12 @@ input, textarea { caret-color: var(--accent); }
 .person .avatar { width: 100% !important; height: auto !important; aspect-ratio: 1; font-size: 64px !important; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
 .coll-meta a { cursor: pointer; }
 .coll-meta a:hover { text-decoration: underline; }
+
+/* Small screens: a compact profile header so the owner's background image stays visible. */
+@media (max-width: 700px) {
+  .prof-head { flex-direction: row; align-items: flex-end; gap: 12px; min-height: 200px; padding: 56px 16px 16px; }
+  .prof-head .coll-art, .mobile .prof-head .coll-art { width: 72px; max-width: 72px; align-self: flex-end; }
+  .prof-head .coll-info h1 { font-size: 24px; margin: 0; -webkit-line-clamp: 2; }
+  .prof-head .coll-type { display: none; }
+  .prof-head .coll-desc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+}
