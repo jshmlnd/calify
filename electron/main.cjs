@@ -82,7 +82,8 @@ ipcMain.handle('update-check', async () => {
   try { return (await autoUpdater.checkForUpdates())?.isUpdateAvailable ? 'downloading' : 'none' } catch { return 'error' }
 })
 ipcMain.handle('update-ready', () => readyVersion)
-ipcMain.on('update-install', () => readyVersion && autoUpdater.quitAndInstall(true, true))   // silent install, then relaunch
+// Close the window first so Calify.exe is gone before the installer removes the old files ("Failed to uninstall old application files: 2").
+ipcMain.on('update-install', () => { if (!readyVersion) return; app.removeAllListeners('window-all-closed'); win?.destroy(); setImmediate(() => autoUpdater.quitAndInstall(true, true)) })   // silent install, then relaunch
 
 app.on('second-instance', (_, argv) => { if (win) { if (win.isMinimized()) win.restore(); win.focus() } sendJoin(joinCode(argv)) })
 app.whenReady().then(create)

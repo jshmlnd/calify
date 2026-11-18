@@ -3,6 +3,11 @@ export const APP_VERSION = __APP_VERSION__
 
 export const CHANGELOG = [
   {
+    version: '1.1.2', date: '2026-11-18',
+    new: [],
+    fixed: ['Windows: updates install again (if one failed, uninstall Calify and install this version once)'],
+  },
+  {
     version: '1.1.1', date: '2026-11-18',
     new: [],
     fixed: ["Listen together: the screen no longer goes blank when someone joins or sends a message"],
