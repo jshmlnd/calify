@@ -3,6 +3,11 @@ export const APP_VERSION = __APP_VERSION__
 
 export const CHANGELOG = [
   {
+    version: '1.1.1', date: '2026-11-18',
+    new: [],
+    fixed: ["Listen together: the screen no longer goes blank when someone joins or sends a message"],
+  },
+  {
     version: '1.1.0', date: '2026-11-17',
     new: [
       'Accounts with Google sign-in',
