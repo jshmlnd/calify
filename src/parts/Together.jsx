@@ -111,13 +111,13 @@ function NowAndNext({ t, host }) {
 }
 
 function Chat({ t, me }) {
-  const end = useRef()
-  useEffect(() => end.current?.scrollIntoView({ block: 'nearest' }), [t.chat.length])
+  const box = useRef()
+  // Scroll only .tg-body: scrollIntoView also scrolls the app shell and blanks the screen on phones.
+  useEffect(() => { const s = box.current?.closest('.scroll-y'); if (s) s.scrollTop = s.scrollHeight }, [t.chat.length])
   return (
-    <div className="tg-chat" aria-live="polite">
+    <div className="tg-chat" aria-live="polite" ref={box}>
       {t.chat.map((m, i) => m.kind === 'event' ? <p key={i} className="tg-event">{m.text}</p>
         : <p key={i}><b>{m.from === me ? 'You' : m.name}</b> {m.text}</p>)}
-      <i ref={end} />
     </div>
   )
 }
